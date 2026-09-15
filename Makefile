@@ -33,9 +33,9 @@ lint:
 	$(VENV)/bin/flake8 . --exclude=.venv,venv,env,__pycache__,.git
 	$(VENV)/bin/mypy . --explicit-package-bases --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs --exclude=.venv,venv,env,__pycache__,.git
 
-# Optional stricter lint (mypy --strict). mypy is run from inside Fly_in/
+# Optional stricter lint (mypy --strict). mypy is run from inside Call_Me_Maybe/
 # because the modules use flat imports (e.g. "from hub import Hub") that
 # Python only resolves because the script directory is on sys.path.
 lint-strict:
 	$(VENV)/bin/flake8 . --exclude=.venv,venv,env,__pycache__,.git
-	cd Fly_in && ../$(VENV)/bin/mypy . --strict
+	cd Call_Me_Maybe && ../$(VENV)/bin/mypy . --strict
