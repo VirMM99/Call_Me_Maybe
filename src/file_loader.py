@@ -1,12 +1,13 @@
 import json
 import sys
 from pydantic import ValidationError
-from .basemodels import FunctionDefinitionCheck, PromptItem
+from basemodels import FunctionDefinitionCheck, PromptItem
 
 
 class ParsingFileError(Exception):
     """Custom exception for wrong format in JSON file"""
     pass
+
 
 def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
     """Load the function_definitions.json file
@@ -32,7 +33,8 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
             )
     for item in data:
         try:
-            definition: FunctionDefinitionCheck = FunctionDefinitionCheck(**item)
+            definition: FunctionDefinitionCheck = FunctionDefinitionCheck(
+                                                    **item)
             function_list.append(definition)
         except ValidationError:
             print(
