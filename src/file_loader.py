@@ -16,7 +16,7 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
     """
     function_list: list[FunctionDefinitionCheck] = []
     try:
-        with open(path, 'r', encoding='uft-8') as fn_def_file:
+        with open(path, 'r', encoding="uft-8") as fn_def_file:
             data = json.load(fn_def_file)
     except FileNotFoundError:
         raise ParsingFileError(f"'{path}' does not exist") from None
@@ -41,7 +41,7 @@ def load_prompts(path: str) -> list[PromptItem]:
     """Load the promts from the function_calling_test.json"""
     prompt_list: list[PromptItem] = []
     try:
-        with open(path, 'r', encoding='uft-8') as prompt_file:
+        with open(path, 'r', encoding="uft-8") as prompt_file:
             data = json.load(prompt_file)
     except FileNotFoundError:
         raise ParsingFileError(f"'{path}' does not exist") from None
@@ -71,4 +71,3 @@ def check_file_loaders():
 
 if __name__ == "__main__":
     check_file_loaders()
-    

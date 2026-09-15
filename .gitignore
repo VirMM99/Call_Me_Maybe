@@ -1,7 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-*$py.class
 
 # CPython cache
 .pytest_cache/
@@ -10,14 +9,12 @@ __pycache__/
 
 # Distribution / packaging
 dist/
+build/
+*.egg_info/
 .llm_sdk
-prokect.toml
-uv.lock
 
 # Virtual environments
 venv/
-venv-fly_in/
-venv_fly_in/
 .venv/
 .vscode/
 

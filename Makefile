@@ -9,13 +9,11 @@ PY := $(VENV)/bin/python
 # A venv is used because campus Python installations are often
 # "externally managed" (PEP 668) and reject global pip installs.
 install:
-	$(PYTHON) -m venv $(VENV)
-	$(VENV)/bin/pip install --upgrade pip
-	$(VENV)/bin/pip install -r requirements.txt
+	uv sync
 
 # Runs the main script with the default
 run:
-	$(PY) $(MAIN) 
+	uv run python -m src
 
 # Runs the main script under pdb (debug mode)
 debug:
