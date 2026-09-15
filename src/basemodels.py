@@ -1,17 +1,17 @@
-from pydantic import (
-    BaseModel, Field, ConfigDict, ValidationError)
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Any
 
 
 class ParameterDefinition(BaseModel):
-    """Check and validate the function parameters"""
+    """Check and validate the function parameters types"""
     model_config = ConfigDict(extra='forbid')
-    type: Any
+    type: str
+
 
 class FunctionDefinitionCheck(BaseModel):
-    """Check and validate the funtions availables"""
+    """Check and validate the availables funtions definitions """
     model_config = ConfigDict(extra='forbid')
-    name: str = Field(..., min_length=4)
+    name: str = Field(..., min_length=1)
     description: str = Field(...)
     parameters: dict[str, ParameterDefinition] = Field(...)
     returns: ParameterDefinition
@@ -26,5 +26,5 @@ class FunctionCallOutput(BaseModel):
     """Check and validate funxtion call output"""
     model_config = ConfigDict(extra='forbid')
     prompt: str = Field(...)
-    name: str = Field(..., min_length=4)
+    name: str = Field(..., min_length=1)
     parameters: dict[str, Any] = Field(...)
