@@ -9,7 +9,7 @@ class ParameterDefinition(BaseModel):
 
 
 class FunctionDefinitionCheck(BaseModel):
-    """Check and validate the availables funtions definitions """
+    """Check and validate the availables functions definitions """
     model_config = ConfigDict(extra='forbid')
     name: str = Field(..., min_length=1)
     description: str = Field(...)
@@ -23,7 +23,7 @@ class PromptItem(BaseModel):
 
 
 class FunctionCallOutput(BaseModel):
-    """Check and validate funxtion call output"""
+    """Check and validate function call output"""
     model_config = ConfigDict(extra='forbid')
     prompt: str = Field(...)
     name: str = Field(..., min_length=1)

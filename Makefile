@@ -17,7 +17,7 @@ run:
 
 # Runs the main script under pdb (debug mode)
 debug:
-	$(PY) -m pdb $(MAIN)
+	uv run python -m pdb -m src 
 
 # Removes temporary files, caches and the virtual environment
 clean:
@@ -29,11 +29,11 @@ clean:
 # Mandatory lint: flake8 + mypy with the exact flags required by the subject
 lint:
 	$(VENV)/bin/flake8 . --exclude=.venv,venv,env,__pycache__,.git
-	$(VENV)/bin/mypy . --explicit-package-bases --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs --exclude=.venv,venv,env,__pycache__,.git
+	$(VENV)/bin/mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs --exclude=.venv,venv,env,__pycache__,.git
 
 # Optional stricter lint (mypy --strict). mypy is run from inside Call_Me_Maybe/
 # because the modules use flat imports (e.g. "from hub import Hub") that
 # Python only resolves because the script directory is on sys.path.
 lint-strict:
 	$(VENV)/bin/flake8 . --exclude=.venv,venv,env,__pycache__,.git
-	cd Call_Me_Maybe && ../$(VENV)/bin/mypy . --strict
+	../$(VENV)/bin/mypy . --strict

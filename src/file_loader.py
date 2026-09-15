@@ -15,7 +15,7 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
     Returns:
         list[FunctionDefinitionCheck]: List of valid function definitions
     Raises:
-        ParsingFileError: If the file does not existe, is invalid JSON,
+        ParsingFileError: If the file does not exist, is invalid JSON,
             or root element is not a list
     """
     function_list: list[FunctionDefinitionCheck] = []
@@ -32,7 +32,7 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
             )
     for item in data:
         try:
-            definition = FunctionDefinitionCheck(**item)
+            definition: FunctionDefinitionCheck = FunctionDefinitionCheck(**item)
             function_list.append(definition)
         except ValidationError:
             print(
@@ -44,7 +44,7 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
 
 
 def load_prompts(path: str) -> list[PromptItem]:
-    """Load and validates the promts from the function_calling_test.json
+    """Load and validates the prompts from the function_calling_test.json
     Args:
         path (str): Path to the prompts JSON file
     Returns:
@@ -68,7 +68,7 @@ def load_prompts(path: str) -> list[PromptItem]:
             )
     for item in data:
         try:
-            prompt = PromptItem(**item)
+            prompt: PromptItem = PromptItem(**item)
             prompt_list.append(prompt)
         except ValidationError:
             print(
