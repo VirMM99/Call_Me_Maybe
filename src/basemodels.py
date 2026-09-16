@@ -34,6 +34,6 @@ class PromptItem(BaseModel):
 class FunctionCallOutput(BaseModel):
     """Check and validate function call output"""
     model_config = ConfigDict(extra='forbid')
-    prompt: str
+    prompt: str = Field(...)
     name: str = Field(..., min_length=1)
-    parameters: dict[str, Any]
+    parameters: dict[str, Any] = Field(...)

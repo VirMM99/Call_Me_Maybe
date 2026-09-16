@@ -111,14 +111,3 @@ def load_prompts(path: str) -> list[PromptItem]:
                 file=sys.stderr,
                 )
     return prompt_list
-
-
-# def check_file_loaders():
-#     print("Function definition:")
-#     print(load_fn_definitions("data/input/functions_definition.json"))
-#     print("Prompts")
-#     print(load_prompts("data/input/function_calling_tests.json"))
-
-
-# if __name__ == "__main__":
-#     check_file_loaders()
