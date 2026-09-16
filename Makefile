@@ -1,7 +1,7 @@
 PYTHON ?= python3
 VENV ?= .venv
 PY := $(VENV)/bin/python
-# MAIN ?= Call_Me_Maybe/main.py
+
 
 .PHONY: install run debug clean lint lint-strict
 

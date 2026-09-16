@@ -1,23 +1,24 @@
 import json
 import sys
 from pydantic import ValidationError
-from basemodels import FunctionDefinitionCheck, PromptItem
+from .basemodels import FunctionDefinitionCheck, PromptItem
 
 
 class ParsingFileError(Exception):
-    """Custom exception for wrong format in JSON file"""
+    """Exception raised when an input JSON file cannot be parsed"""
     pass
 
 
 def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
-    """Load the function_definitions.json file
+    """Load and validate function definitions from a JSON file
     Args:
-        path (str): Path to the function definitions JSON file
+        path: Path to the function definitions JSON file
     Returns:
-        list[FunctionDefinitionCheck]: List of valid function definitions
+        A list of validated function definitions
     Raises:
-        ParsingFileError: If the file does not exist, is invalid JSON,
-            or root element is not a list
+        ParsingFileError: If the file does not exist,
+            contains invalid JSON,
+            or its root element is not a list
     """
     function_list: list[FunctionDefinitionCheck] = []
     try:
@@ -27,32 +28,46 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
         raise ParsingFileError(f"'{path}' does not exist") from None
     except json.JSONDecodeError:
         raise ParsingFileError(f"'{path}' contains invalid JSON") from None
+    except OSError as error:  # This covers lecture problems with the file
+        raise ParsingFileError(
+                f"Could not read '{path}': {error}"
+        ) from None
+
     if not isinstance(data, list):
         raise ParsingFileError(
-            f"Error: the JSON files {path} must contain a list at its root."
+            f"'{path}' must contain a list at its root."
             )
+
     for item in data:
-        try:
-            definition: FunctionDefinitionCheck = FunctionDefinitionCheck(
-                                                    **item)
-            function_list.append(definition)
-        except ValidationError:
+        if not isinstance(item, dict):
             print(
-                f"The funtion definition:\n{item}\n"
-                "does not match the expected format and will be ignored",
+                f"Function definition '{item}' is not a JSON object"
+                " and will be ignored",
+                file=sys.stderr,
+            )
+            continue
+
+        try:
+            definition = FunctionDefinitionCheck(**item)
+            function_list.append(definition)
+        except ValidationError as error:
+            print(
+                f"Invalid function definition:\n{item}\n"
+                f"Reason: {error}",
                 file=sys.stderr
                 )
     return function_list
 
 
 def load_prompts(path: str) -> list[PromptItem]:
-    """Load and validates the prompts from the function_calling_test.json
+    """Load and validates the prompts from a JSON file
     Args:
-        path (str): Path to the prompts JSON file
+        path: Path to the prompts JSON file
     Returns:
-        list[PromptItem]: List of valid prompt items
+        A list of validated prompts
     Raises:
-        ParsingFileError: If the file does not exist, is invalid JSON,
+        ParsingFileError: If the file does not exist,  cannot be read,
+            contains Invalid JSON,
             or root element is not a list
         """
     prompt_list: list[PromptItem] = []
@@ -63,20 +78,37 @@ def load_prompts(path: str) -> list[PromptItem]:
         raise ParsingFileError(f"'{path}' does not exist") from None
     except json.JSONDecodeError:
         raise ParsingFileError(f"'{path}' contains invalid JSON") from None
+    except OSError as error:  # This covers lecture problems with the file
+        raise ParsingFileError(
+                f"Could not read '{path}': {error}"
+        ) from None
+
     if not isinstance(data, list):
         raise ParsingFileError(
-            f"Error: the JSON files {path} must contain a"
+            f"'{path}' must contain a JSON"
             " list at its root."
             )
+
     for item in data:
-        try:
-            prompt: PromptItem = PromptItem(**item)
-            prompt_list.append(prompt)
-        except ValidationError:
+        # This is so we can use item as dict (**item)
+        if not isinstance(item, dict):
             print(
-                f"Prompt\n{item}\n does not match the correct format"
+                f"Prompt '{item}' is not a JSON object"
                 " and will be ignored",
-                file=sys.stderr
+                file=sys.stderr,
+            )
+            continue
+
+        try:
+            prompt = PromptItem(**item)
+            prompt_list.append(prompt)
+        # I use 'as error' to save what kind of error it is.
+        # Very useful for debugging
+        except ValidationError as error:
+            print(
+                f"Invalid prompt\n{item}\n"
+                f"Reason: {error}",
+                file=sys.stderr,
                 )
     return prompt_list
 

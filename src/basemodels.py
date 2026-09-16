@@ -1,19 +1,28 @@
 from pydantic import BaseModel, Field, ConfigDict
+from enum import Enum
 from typing import Any
 
 
+class ParameterterType(str, Enum):
+    """Supported parameter types"""
+    STRING = "string"
+    NUMBER = "number"
+    INGEGER = " integer"
+
+
 class ParameterDefinition(BaseModel):
-    """Check and validate the function parameters types"""
+    """Check and validate a parameter definition"""
     model_config = ConfigDict(extra='forbid')
-    type: str
+    type: ParameterterType
 
 
 class FunctionDefinitionCheck(BaseModel):
     """Check and validate the availables functions definitions """
     model_config = ConfigDict(extra='forbid')
+
     name: str = Field(..., min_length=1)
-    description: str = Field(...)
-    parameters: dict[str, ParameterDefinition] = Field(...)
+    description: str
+    parameters: dict[str, ParameterDefinition]
     returns: ParameterDefinition
 
 
@@ -25,6 +34,6 @@ class PromptItem(BaseModel):
 class FunctionCallOutput(BaseModel):
     """Check and validate function call output"""
     model_config = ConfigDict(extra='forbid')
-    prompt: str = Field(...)
+    prompt: str
     name: str = Field(..., min_length=1)
-    parameters: dict[str, Any] = Field(...)
+    parameters: dict[str, Any]
