@@ -22,7 +22,9 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
     """
     function_list: list[FunctionDefinitionCheck] = []
     try:
+        # path, read, encoding="utf-8"-> represent correcly the chars
         with open(path, 'r', encoding="utf-8") as fn_def_file:
+            # Read the content of JSON an convert yn Python data
             data = json.load(fn_def_file)
     except FileNotFoundError:
         raise ParsingFileError(f"'{path}' does not exist") from None
@@ -39,6 +41,7 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
             )
 
     for item in data:
+        # w/ isinstance we ask is the item a dict?
         if not isinstance(item, dict):
             print(
                 f"Function definition '{item}' is not a JSON object"
@@ -48,6 +51,7 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
             continue
 
         try:
+            # the ** unpack the dict so we can pass it as arguments
             definition = FunctionDefinitionCheck(**item)
             function_list.append(definition)
         except ValidationError as error:

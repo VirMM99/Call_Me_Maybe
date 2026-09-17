@@ -5,7 +5,7 @@ from .basemodels import (
 )
 
 # Checking if function exists and are equal
-# the parameters are the expected ones
+# if the parameters are the expected ones
 # and the type are the same as the definition
 
 
@@ -20,7 +20,8 @@ def is_valid_parameter_type(
                         value: Any,
                         expected_type: str,
                         ) -> bool:
-    """Check whether a value matches the expected parameter type
+    """Check whether a value that the LLM 
+    gives me matches the expected parameter type
     Args:
         value: Parameter value to check
         expected_type: Expected type from the function definition
@@ -31,6 +32,7 @@ def is_valid_parameter_type(
     if expected_type == "number":
         return (
                 isinstance(value, (int, float))
+                # We put bool coz python can see it as numbers
                 and not isinstance(value, bool)
                 )
     if expected_type == "string":
@@ -44,7 +46,7 @@ def validate_function_call(
         ) -> None:
     """Validate a function call against a function definition
     Args:
-        call: Function call to validate
+        call: Function call from LLM to validate
         definition: Expected function definition
     Raises:
         FunctionCallValidationError: If the call does not match

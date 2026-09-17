@@ -3,17 +3,19 @@ from enum import Enum
 from typing import Any
 
 
-class ParameterterType(str, Enum):
+class ParameterType(str, Enum):
     """Supported parameter types"""
     STRING = "string"
     NUMBER = "number"
-    INGEGER = " integer"
+    INTEGER = "integer"
 
 
 class ParameterDefinition(BaseModel):
-    """Check and validate a parameter definition"""
+    """Validate the type of the parameter"""
+    # ConfigDict if there is a extra param 
+    # that I did not define, reject it
     model_config = ConfigDict(extra='forbid')
-    type: ParameterterType
+    type: ParameterType
 
 
 class FunctionDefinitionCheck(BaseModel):
@@ -27,12 +29,13 @@ class FunctionDefinitionCheck(BaseModel):
 
 
 class PromptItem(BaseModel):
+    """What we are gonna sent: prompt"""
     model_config = ConfigDict(extra='forbid')
     prompt: str = Field(..., min_length=1)
 
 
 class FunctionCallOutput(BaseModel):
-    """Check and validate function call output"""
+    """Check and validate the function call output"""
     model_config = ConfigDict(extra='forbid')
     prompt: str = Field(...)
     name: str = Field(..., min_length=1)
