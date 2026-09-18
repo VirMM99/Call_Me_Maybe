@@ -52,7 +52,9 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
 
         try:
             # the ** unpack the dict so we can pass it as arguments
-            definition = FunctionDefinitionCheck(**item)
+            definition: FunctionDefinitionCheck = (
+                FunctionDefinitionCheck(**item)
+            ) 
             function_list.append(definition)
         except ValidationError as error:
             print(
@@ -104,7 +106,7 @@ def load_prompts(path: str) -> list[PromptItem]:
             continue
 
         try:
-            prompt = PromptItem(**item)
+            prompt: PromptItem = PromptItem(**item)
             prompt_list.append(prompt)
         # I use 'as error' to save what kind of error it is.
         # Very useful for debugging
