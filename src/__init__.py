@@ -1,5 +1,5 @@
 from .basemodels import (
-                            ParameterterType,
+                            ParameterType,
                             ParameterDefinition,
                             FunctionDefinitionCheck,
                             PromptItem,
@@ -12,14 +12,17 @@ from .file_loader import (
                             load_prompts
                         )
 
+from .constrained_decode import constrained_decode_fn
+
 
 __all__ = [
-        "ParameterterType",
+        "ParameterType",
         "ParameterDefinition",
         "FunctionDefinitionCheck",
         "PromptItem",
         "FunctionCallOutput",
         "ParsingFileError",
         "load_fn_definitions",
-        "load_prompts"
+        "load_prompts",
+        "constrained_decode_fn"
         ]
