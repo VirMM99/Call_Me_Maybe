@@ -1,20 +1,19 @@
-# Byte-compiled / optimized / DLL files
+# General output
+data/output/
+
+# Python cache
 __pycache__/
-*.py[cod]
+*.pyc
+*.pyo
 
-# CPython cache
-.pytest_cache/
+# Type checker / tooling
 .mypy_cache/
-.python-version
-
-# Distribution / packaging
-dist/
-build/
-*.egg_info/
+.pytest_cache/
 
 # Virtual environments
 venv/
 .venv/
 .vscode/
 
-
+# Compiled files
+*.o

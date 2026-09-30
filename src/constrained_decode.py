@@ -20,4 +20,3 @@ def constrained_decode_fn(
             logits[token_id] = float("-inf")
     index_max_logit: int = logits.index(max(logits))
     return index_max_logit
-
