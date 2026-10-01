@@ -22,34 +22,45 @@ def main() -> None:
     for test in test_prompts:
         prompts: str = test.prompt
         generate_ids: list[int] = []
+        selected_function: str | None = None
         # we convert the tokens in numeric ID 
         input_ids: list[int] = llm_model.encode(prompts).tolist()[0]
-        logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
-        index_max_logit: int = constrained_decode_fn(
-                                logits,
-                                list_fn_name,
-                                llm_model,
-                                generate_ids
-                            )
-        token_decoded: str = llm_model.decode(index_max_logit)
-        while index_max_logit >= 0:
-            input_ids = input_ids + [index_max_logit]
-            logits = llm_model.get_logits_from_input_ids(input_ids)
-            generate_ids.append(index_max_logit)
+
+        while True:
+            logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
             index_max_logit: int = constrained_decode_fn(
                                     logits,
                                     list_fn_name,
+                                    loaded_function,
                                     llm_model,
-                                    generate_ids
+                                    generate_ids,
+                                    selected_function
                                 )
-            token_decoded = llm_model.decode(index_max_logit)
-            all_tokens_decoded.append(token_decoded)
-            
-    print (all_tokens_decoded)
 
-    for test_prom in loaded_function:
-        final_prompt = loaded_function + test_prom.prompt
-        input_ids = llm_model.encode(final_prompt)
+            if index_max_logit == 128247:
+                selected_function = llm_model.decode(generate_ids)
+                print("Function selected:", selected_function)
+                break
+            input_ids.append(index_max_logit)
+            generate_ids.append(index_max_logit)
+
+        generate_ids = []
+        while True:
+            logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
+            index_max_logit: int = constrained_decode_fn(
+                                    logits,
+                                    list_fn_name,
+                                    loaded_function,
+                                    llm_model,
+                                    generate_ids,
+                                    selected_function
+                                )
+
+            input_ids.append(index_max_logit)
+            generate_ids.append(index_max_logit)
+
+            print (llm_model.decode(generate_ids))
+            break
 
 
 if __name__ == "__main__":
