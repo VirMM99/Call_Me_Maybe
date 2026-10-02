@@ -59,8 +59,11 @@ def main() -> None:
             input_ids.append(index_max_logit)
             generate_ids.append(index_max_logit)
 
-            print (llm_model.decode(generate_ids))
-            break
+            decoded = llm_model.decode(generate_ids)
+            print(decoded)
+
+            if decoded.endswith("}"):
+                break
 
 
 if __name__ == "__main__":

@@ -11,6 +11,48 @@ def get_allowed_tokens(
     return llm_model.encode(text).tolist()[0]
 
 
+def get_allowed_next_tokens(
+        generated_text: str,
+        parameter_name: str,
+        parameter_type: str,
+        llm_model: Small_LLM_Model,
+        vocab: dict[str, int],
+        ) -> list[int]:
+    """Return token IDs allowed after the current JSON text."""
+
+    if generated_text == "":
+        return get_allowed_tokens("{", llm_model)
+    
+    if generated_text == "{":
+        return get_allowed_tokens(
+            '"' + parameter_name,
+            llm_model
+        )
+    if generated_text == '{"' + parameter_name:
+        return get_allowed_tokens(
+            '":',
+            llm_model
+        )
+    prefix = '{"' + parameter_name + '":'
+
+    if generated_text == prefix:
+        if parameter_type == "number":
+            return[
+                token_id
+                for token, token_id in vocab.items()
+                if token and token[0].isdigit()
+            ]
+        if parameter_type == "string":
+            return get_allowed_tokens('"', llm_model)
+    # Number is already being generated.
+    if generated_text.startswith(prefix):
+        value = generated_text[len(prefix):]
+
+        if value and value[-1].isdigit():
+            return get_allowed_tokens("}", llm_model)
+    return []
+
+
 def constrained_decode_fn(
         logits: list[float],
         list_fn_name: list[str],
@@ -67,10 +109,27 @@ def constrained_decode_fn(
 
         if selected_definition is None:
             raise ValueError("Selected function was not found.")
-        print("Parameters:", selected_definition.parameters)
+        # print("Parameters:", selected_definition.parameters)
 
-        if not generate_ids:
-            list_ids = get_allowed_tokens("{", llm_model)
+        parameter_name = next(iter(selected_definition.parameters))
+        parameter_type = selected_definition.parameters[
+            parameter_name
+        ].type.value
+        generate_text = llm_model.decode(generate_ids)
+
+        list_ids = get_allowed_next_tokens(
+            generate_text,
+            parameter_name,
+            parameter_type,
+            llm_model,
+            vocab
+        )
+
+
+        if not list_ids:
+            raise ValueError(
+                f"No allowed tokens for: {generate_text}"
+            )
     # Is the token id in list_id?,
     # if NOT -inf (impossible to choose),
     # if YES we keep its logit
