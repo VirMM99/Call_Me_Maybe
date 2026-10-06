@@ -17,3 +17,18 @@ venv/
 
 # Compiled files
 *.o
+
+# Ignore Word documents (.doc and .docx)
+*.doc
+*.docx
+
+# Ignore specific folders (e.g., moulinette grading directory)
+moulinette/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Coverage
+.coverage

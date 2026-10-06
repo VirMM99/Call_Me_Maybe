@@ -1,70 +1,191 @@
+"""Main entry point for Call Me Maybe function calling system."""
+
+import argparse
+import json
+import os
+import sys
+from typing import Any
+
 from llm_sdk import Small_LLM_Model
-from .file_loader import load_fn_definitions, load_prompts
+from .file_loader import load_fn_definitions, load_prompts, ParsingFileError
 from .basemodels import FunctionDefinitionCheck, PromptItem
 from .constrained_decode import constrained_decode_fn
+from .validator import validate_function_call
 
 
-def main() -> None:
-    function_def_path: str = "data/input/functions_definition.json"
-    function_call_path: str = "data/input/function_calling_tests.json"
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Function calling system using constrained decoding"
+    )
+    parser.add_argument(
+        "--functions_definition",
+        default="data/input/functions_definition.json",
+        help="Path to function definitions JSON file"
+    )
+    parser.add_argument(
+        "--input",
+        default="data/input/function_calling_tests.json",
+        help="Path to input prompts JSON file"
+    )
+    parser.add_argument(
+        "--output",
+        default="data/output/function_calling_results.json",
+        help="Path to output results JSON file"
+    )
+    return parser.parse_args()
 
-    loaded_function: list[FunctionDefinitionCheck] = load_fn_definitions(function_def_path)
-    test_prompts: list[PromptItem] = load_prompts(function_call_path)
+
+def extract_parameters_from_json(
+        json_text: str,
+        function_def: FunctionDefinitionCheck
+        ) -> dict[str, Any]:
+    """Parse generated JSON text and extract parameters dict."""
+    try:
+        parsed = json.loads(json_text)
+        return {
+            name: parsed[name]
+            for name in function_def.parameters.keys()
+        }
+    except (json.JSONDecodeError, KeyError) as e:
+        raise ValueError(f"Failed to extract parameters from JSON: {e}")
+
+
+def generate_function_call(
+        prompt: str,
+        llm_model: Small_LLM_Model,
+        list_fn_name: list[str],
+        function_definitions: list[FunctionDefinitionCheck]
+        ) -> tuple[str, dict[str, Any]]:
+    """Generate function name and parameters for a single prompt."""
+    input_ids: list[int] = llm_model.encode(prompt).tolist()[0]
+    generate_ids: list[int] = []
+    selected_function: str | None = None
+
+    while True:
+        logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
+        next_token: int = constrained_decode_fn(
+            logits,
+            list_fn_name,
+            function_definitions,
+            llm_model,
+            generate_ids,
+            selected_function
+        )
+
+        if next_token == 128247:
+            selected_function = llm_model.decode(generate_ids)
+            break
+        input_ids.append(next_token)
+        generate_ids.append(next_token)
+
+    if selected_function is None:
+        raise ValueError("No function selected")
+
+    selected_definition = None
+    for func in function_definitions:
+        if func.name == selected_function:
+            selected_definition = func
+            break
+
+    if selected_definition is None:
+        raise ValueError(f"Function definition not found: {selected_function}")
+
+    generate_ids = []
+    while True:
+        logits = llm_model.get_logits_from_input_ids(input_ids)
+        next_token = constrained_decode_fn(
+            logits,
+            list_fn_name,
+            function_definitions,
+            llm_model,
+            generate_ids,
+            selected_function
+        )
+
+        input_ids.append(next_token)
+        generate_ids.append(next_token)
+
+        decoded = llm_model.decode(generate_ids)
+        if decoded.endswith("}"):
+            parameters = extract_parameters_from_json(
+                decoded, selected_definition
+            )
+            return selected_function, parameters
+
+    raise ValueError("Failed to generate complete JSON")
+
+
+def main() -> int:
+    """Main entry point."""
+    args = parse_args()
+
+    try:
+        loaded_functions: list[FunctionDefinitionCheck] = load_fn_definitions(
+            args.functions_definition
+        )
+        test_prompts: list[PromptItem] = load_prompts(args.input)
+    except ParsingFileError as e:
+        print(f"Error loading input files: {e}", file=sys.stderr)
+        return 1
+
+    if not loaded_functions:
+        print("No valid function definitions loaded", file=sys.stderr)
+        return 1
+
+    if not test_prompts:
+        print("No valid prompts loaded", file=sys.stderr)
+        return 1
+
     llm_model: Small_LLM_Model = Small_LLM_Model()
-    list_fn_name: list[str] = []
+    list_fn_name: list[str] = [fn.name for fn in loaded_functions]
 
-    for function in loaded_function:
-            list_fn_name.append(function.name)
+    output_dir = os.path.dirname(args.output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
 
-    # We go for every element in test_prompts
-    # every round test is a PromptItem diferent
-    all_tokens_decoded: list[str] = []
+    results: list[dict[str, Any]] = []
+
     for test in test_prompts:
-        prompts: str = test.prompt
-        generate_ids: list[int] = []
-        selected_function: str | None = None
-        # we convert the tokens in numeric ID 
-        input_ids: list[int] = llm_model.encode(prompts).tolist()[0]
+        prompt = test.prompt
+        try:
+            fn_name, parameters = generate_function_call(
+                prompt,
+                llm_model,
+                list_fn_name,
+                loaded_functions
+            )
 
-        while True:
-            logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
-            index_max_logit: int = constrained_decode_fn(
-                                    logits,
-                                    list_fn_name,
-                                    loaded_function,
-                                    llm_model,
-                                    generate_ids,
-                                    selected_function
-                                )
+            result = {
+                "prompt": prompt,
+                "name": fn_name,
+                "parameters": parameters
+            }
+            results.append(result)
 
-            if index_max_logit == 128247:
-                selected_function = llm_model.decode(generate_ids)
-                print("Function selected:", selected_function)
-                break
-            input_ids.append(index_max_logit)
-            generate_ids.append(index_max_logit)
+            selected_def = next(
+                f for f in loaded_functions if f.name == fn_name
+            )
+            validate_function_call(
+                type("obj", (), {"name": fn_name, "parameters": parameters})(),
+                selected_def
+            )
+            print(f"OK: {prompt} -> {fn_name}({parameters})")
 
-        generate_ids = []
-        while True:
-            logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
-            index_max_logit: int = constrained_decode_fn(
-                                    logits,
-                                    list_fn_name,
-                                    loaded_function,
-                                    llm_model,
-                                    generate_ids,
-                                    selected_function
-                                )
+        except Exception as e:
+            print(f"Error processing '{prompt}': {e}", file=sys.stderr)
+            return 1
 
-            input_ids.append(index_max_logit)
-            generate_ids.append(index_max_logit)
+    try:
+        with open(args.output, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
+        print(f"Results written to {args.output}")
+    except OSError as e:
+        print(f"Error writing output file: {e}", file=sys.stderr)
+        return 1
 
-            decoded = llm_model.decode(generate_ids)
-            print(decoded)
-
-            if decoded.endswith("}"):
-                break
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

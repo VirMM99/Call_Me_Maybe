@@ -11,46 +11,133 @@ def get_allowed_tokens(
     return llm_model.encode(text).tolist()[0]
 
 
+def get_param_names_types(
+        function_def: FunctionDefinitionCheck,
+        ) -> list[tuple[str, str]]:
+    """Extract parameter name and types in order from
+    function definition."""
+    return [
+        (name, param.type.value)
+        for name, param in function_def.parameters.items()
+    ]
+
 def get_allowed_next_tokens(
-        generated_text: str,
-        parameter_name: str,
-        parameter_type: str,
+        param_index: int,
+        arg_state: str,
+        param_names_and_types: list[tuple[str, str]],
         llm_model: Small_LLM_Model,
         vocab: dict[str, int],
         ) -> list[int]:
-    """Return token IDs allowed after the current JSON text."""
+    """Return token IDs allowed based on explicit generation state."""
 
-    if generated_text == "":
+    if not param_names_and_types:
+        return get_allowed_tokens("{}", llm_model)
+
+    if arg_state == "start":
         return get_allowed_tokens("{", llm_model)
-    
-    if generated_text == "{":
-        return get_allowed_tokens(
-            '"' + parameter_name,
-            llm_model
-        )
-    if generated_text == '{"' + parameter_name:
-        return get_allowed_tokens(
-            '":',
-            llm_model
-        )
-    prefix = '{"' + parameter_name + '":'
 
-    if generated_text == prefix:
-        if parameter_type == "number":
-            return[
+    if arg_state == "key":
+        if param_index < len(param_names_and_types):
+            param_name = param_names_and_types[param_index][0]
+            return get_allowed_tokens(f'"{param_name}',
+                                llm_model)
+        return []
+
+    if arg_state == "colon":
+        return get_allowed_tokens(":", llm_model)
+    if arg_state == "value":
+        if param_index >= len(param_names_and_types):
+            return []
+        param_type = param_names_and_types[param_index][1]
+        if param_type == "number":
+            return [
                 token_id
                 for token, token_id in vocab.items()
-                if token and token[0].isdigit()
+                if token and (token[0].isdigit() or token[0] ==
+                "-")
             ]
-        if parameter_type == "string":
+        if param_type == "string":
             return get_allowed_tokens('"', llm_model)
-    # Number is already being generated.
-    if generated_text.startswith(prefix):
-        value = generated_text[len(prefix):]
+        return []
 
-        if value and value[-1].isdigit():
+    if arg_state == "string_content":
+        return [
+            token_id
+            for token, token_id in vocab.items()
+            if token and '"' not in token and "\n" not in token
+        ]
+    if arg_state == "string_end":
+        if param_index == len(param_names_and_types) - 1:
             return get_allowed_tokens("}", llm_model)
+        else:
+            return get_allowed_tokens(",", llm_model)
+    if arg_state == "number_end":
+        if param_index == len(param_names_and_types) - 1:
+            return get_allowed_tokens("}", llm_model)
+        else:
+            return get_allowed_tokens(",", llm_model)
+
+    if arg_state == "comma":
+        return get_allowed_tokens(",", llm_model)
+    if arg_state == "end":
+        return get_allowed_tokens("}", llm_model)
     return []
+
+
+def get_next_state(
+        current_state: str,
+        param_index: int,
+        param_names_and_types: list[tuple[str, str]],
+        token_text: str,
+        ) -> tuple[int, str]:
+    """Determine next (param_index, arg_state) based on current
+    state and generate token."""
+    num_params = len(param_names_and_types)
+    if current_state == "start":
+        return(0, "key")
+    if current_state == "key":
+        return(param_index, "colon")
+    if current_state == "colon":
+        return (param_index, "value")
+
+    if current_state == "value":
+        if param_index >= num_params:
+            return(param_index, "end")
+        param_type = param_names_and_types[param_index][1]
+        if param_type == "string":
+            if token_text == '"':
+                return(param_index, "string_content")
+            return (param_index, "value")
+        if param_type == "number":
+            if token_text and (token_text[-1].isdigit() or
+                    token_text[-1] == "."):
+                return(param_index, "number_end")
+            return (param_index, "value")
+        return (param_index, "value")
+
+    if current_state == "string_content":
+        if token_text == '"':
+            return (param_index, "string_end")
+        return (param_index, "string_content")
+    if current_state == "string_end":
+        if param_index == num_params - 1:
+            return (param_index, "end")
+        else:
+            return (param_index + 1, "key")
+
+    if current_state == "number_end":
+        if param_index == num_params - 1:
+            return (param_index, "end")
+        else:
+            return(param_index + 1, "key")
+
+    if current_state == "comma":
+        return(param_index, "key")
+
+    if current_state == "end":
+        return (param_index, "end")
+
+    return (param_index, "end")
 
 
 def constrained_decode_fn(
@@ -59,8 +146,10 @@ def constrained_decode_fn(
         function_definitions: list[FunctionDefinitionCheck],
         llm_model: Small_LLM_Model,
         generate_ids: list[int],
-        selected_function: str | None = None
-        ) -> int:
+        selected_function: str | None = None,
+        param_index: int = 0,
+        arg_state: str = "start"
+        ) -> tuple[int, int, str]:
 
     list_ids: list[int] = []
     vocab_path: str = llm_model.get_path_to_vocab_file()
@@ -99,9 +188,9 @@ def constrained_decode_fn(
 
         if not list_ids:
             raise ValueError("There is no list of IDs.")
+        return index_max_logit, 0, "start"
     else:
         selected_definition = None
-
         for function in function_definitions:
             if function.name == selected_function:
                 selected_definition = function
@@ -111,16 +200,13 @@ def constrained_decode_fn(
             raise ValueError("Selected function was not found.")
         # print("Parameters:", selected_definition.parameters)
 
-        parameter_name = next(iter(selected_definition.parameters))
-        parameter_type = selected_definition.parameters[
-            parameter_name
-        ].type.value
-        generate_text = llm_model.decode(generate_ids)
+        param_names_and_types = get_param_names_types(
+            selected_definition)
 
         list_ids = get_allowed_next_tokens(
-            generate_text,
-            parameter_name,
-            parameter_type,
+            param_index,
+            arg_state,
+            param_names_and_types,
             llm_model,
             vocab
         )
@@ -128,7 +214,8 @@ def constrained_decode_fn(
 
         if not list_ids:
             raise ValueError(
-                f"No allowed tokens for: {generate_text}"
+                "No allowed tokens for"
+                f"param_index={param_index}, state={arg_state}"
             )
     # Is the token id in list_id?,
     # if NOT -inf (impossible to choose),
@@ -138,4 +225,9 @@ def constrained_decode_fn(
             logits[token_id] = float("-inf")
     # Choose the permitted token with the max logit
     index_max_logit: int = logits.index(max(logits))
-    return index_max_logit
+
+    token_text = llm_model.decode([index_max_logit])
+    next_param_index, next_arg_state = get_next_state(
+        arg_state, param_index, param_names_and_types, token_text
+    )
+    return index_max_logit, next_param_index, next_arg_state
