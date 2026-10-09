@@ -54,7 +54,7 @@ def load_fn_definitions(path: str) -> list[FunctionDefinitionCheck]:
             # the ** unpack the dict so we can pass it as arguments
             definition: FunctionDefinitionCheck = (
                 FunctionDefinitionCheck(**item)
-            ) 
+            )
             function_list.append(definition)
         except ValidationError as error:
             print(

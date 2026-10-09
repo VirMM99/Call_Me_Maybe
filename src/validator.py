@@ -20,7 +20,7 @@ def is_valid_parameter_type(
                         value: Any,
                         expected_type: str,
                         ) -> bool:
-    """Check whether a value that the LLM 
+    """Check whether a value that the LLM
     gives me matches the expected parameter type
     Args:
         value: Parameter value to check

@@ -12,7 +12,7 @@ class ParameterType(str, Enum):
 
 class ParameterDefinition(BaseModel):
     """Validate the type of the parameter"""
-    # ConfigDict if there is a extra param 
+    # ConfigDict if there is a extra param
     # that I did not define, reject it
     model_config = ConfigDict(extra='forbid')
     type: ParameterType

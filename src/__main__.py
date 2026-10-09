@@ -64,7 +64,7 @@ def generate_function_call(
 
     while True:
         logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
-        next_token: int = constrained_decode_fn(
+        next_token, _, _ = constrained_decode_fn(
             logits,
             list_fn_name,
             function_definitions,
@@ -92,15 +92,19 @@ def generate_function_call(
         raise ValueError(f"Function definition not found: {selected_function}")
 
     generate_ids = []
+    param_index = 0
+    arg_state = "start"
     while True:
         logits = llm_model.get_logits_from_input_ids(input_ids)
-        next_token = constrained_decode_fn(
+        next_token, param_index, arg_state = constrained_decode_fn(
             logits,
             list_fn_name,
             function_definitions,
             llm_model,
             generate_ids,
-            selected_function
+            selected_function,
+            param_index,
+            arg_state
         )
 
         input_ids.append(next_token)

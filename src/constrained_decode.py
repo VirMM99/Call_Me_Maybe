@@ -2,11 +2,19 @@ from llm_sdk import Small_LLM_Model
 import json
 from .basemodels import FunctionDefinitionCheck
 
+_vocab_cache: dict[str, dict[str, int]] = {}
+
+def _load_vocab(vocab_path: str) -> dict[str, int]:
+    if vocab_path not in _vocab_cache:
+        with open(vocab_path, "r") as f:
+            _vocab_cache[vocab_path] = json.load(f)
+    return _vocab_cache[vocab_path]
+
 
 def get_allowed_tokens(
         text: str,
         llm_model: Small_LLM_Model,
-        ) -> list [int]:
+        ) -> list[int]:
     """Return the token IDs corresponding to the given text."""
     return llm_model.encode(text).tolist()[0]
 
@@ -21,12 +29,14 @@ def get_param_names_types(
         for name, param in function_def.parameters.items()
     ]
 
+
 def get_allowed_next_tokens(
         param_index: int,
         arg_state: str,
         param_names_and_types: list[tuple[str, str]],
         llm_model: Small_LLM_Model,
         vocab: dict[str, int],
+        decoded_so_far: str,
         ) -> list[int]:
     """Return token IDs allowed based on explicit generation state."""
 
@@ -39,23 +49,38 @@ def get_allowed_next_tokens(
     if arg_state == "key":
         if param_index < len(param_names_and_types):
             param_name = param_names_and_types[param_index][0]
-            return get_allowed_tokens(f'"{param_name}',
-                                llm_model)
+            full_key = f'"{param_name}":'
+            encoded_key = llm_model.encode(full_key).tolist()[0]
+            partial = llm_model.encode(
+                        decoded_so_far
+                    ).tolist()[0]
+            if partial == encoded_key[:len(partial)]:
+                if len(partial) == len(encoded_key):
+                    return get_allowed_tokens(":", llm_model)
+                next_token = encoded_key[len(partial)]
+                return [next_token]
+            return get_allowed_tokens(":", llm_model)
         return []
 
     if arg_state == "colon":
         return get_allowed_tokens(":", llm_model)
+
     if arg_state == "value":
         if param_index >= len(param_names_and_types):
             return []
         param_type = param_names_and_types[param_index][1]
         if param_type == "number":
-            return [
+            digit_tokens = [
                 token_id
                 for token, token_id in vocab.items()
-                if token and (token[0].isdigit() or token[0] ==
-                "-")
+                if token and (token[0].isdigit()
+                            or token[0] == "-")
             ]
+            if param_index == len(param_names_and_types) - 1:
+                extra = get_allowed_tokens("}", llm_model)
+            else:
+                extra = get_allowed_tokens(",", llm_model)
+            return digit_tokens + extra
         if param_type == "string":
             return get_allowed_tokens('"', llm_model)
         return []
@@ -64,13 +89,17 @@ def get_allowed_next_tokens(
         return [
             token_id
             for token, token_id in vocab.items()
-            if token and '"' not in token and "\n" not in token
+            if token and "\n" not in token and (
+                '"' not in token or token.startswith('"')
+            )
         ]
+
     if arg_state == "string_end":
         if param_index == len(param_names_and_types) - 1:
             return get_allowed_tokens("}", llm_model)
         else:
             return get_allowed_tokens(",", llm_model)
+
     if arg_state == "number_end":
         if param_index == len(param_names_and_types) - 1:
             return get_allowed_tokens("}", llm_model)
@@ -89,36 +118,52 @@ def get_next_state(
         param_index: int,
         param_names_and_types: list[tuple[str, str]],
         token_text: str,
+        decoded_so_far: str,
+        llm_model: Small_LLM_Model
         ) -> tuple[int, str]:
     """Determine next (param_index, arg_state) based on current
-    state and generate token."""
+    state, generate token and full decoded text."""
     num_params = len(param_names_and_types)
+
     if current_state == "start":
-        return(0, "key")
+        return (0, "key")
+
     if current_state == "key":
-        return(param_index, "colon")
+        if param_index >= num_params:
+            return(param_index, "end")
+        param_name = param_names_and_types[param_index][0]
+        full_key = f'"{param_name}":'
+        if decoded_so_far.endswith(full_key):
+            return (param_index, "value")
+        return (param_index, "key")
+
     if current_state == "colon":
         return (param_index, "value")
 
     if current_state == "value":
         if param_index >= num_params:
-            return(param_index, "end")
+            return (param_index, "end")
         param_type = param_names_and_types[param_index][1]
         if param_type == "string":
             if token_text == '"':
-                return(param_index, "string_content")
+                return (param_index, "string_content")
             return (param_index, "value")
         if param_type == "number":
-            if token_text and (token_text[-1].isdigit() or
-                    token_text[-1] == "."):
-                return(param_index, "number_end")
+            if token_text == ",":
+                return (param_index + 1, "key")
+            if token_text == "}":
+                return (param_index, "end")
+            if token_text and (token_text[-1].isdigit()
+                                or token_text[-1] == "."):
+                return (param_index, "value")
             return (param_index, "value")
         return (param_index, "value")
 
     if current_state == "string_content":
-        if token_text == '"':
-            return (param_index, "string_end")
+        if token_text.startswith('"'):
+            return(param_index, "string_end")
         return (param_index, "string_content")
+
     if current_state == "string_end":
         if param_index == num_params - 1:
             return (param_index, "end")
@@ -129,10 +174,10 @@ def get_next_state(
         if param_index == num_params - 1:
             return (param_index, "end")
         else:
-            return(param_index + 1, "key")
+            return (param_index + 1, "key")
 
     if current_state == "comma":
-        return(param_index, "key")
+        return (param_index, "key")
 
     if current_state == "end":
         return (param_index, "end")
@@ -188,6 +233,10 @@ def constrained_decode_fn(
 
         if not list_ids:
             raise ValueError("There is no list of IDs.")
+        for token_id in range(len(logits)):
+            if token_id not in list_ids:
+                logits[token_id] = float("-inf")
+        index_max_logit: int = logits.index(max(logits))
         return index_max_logit, 0, "start"
     else:
         selected_definition = None
@@ -211,23 +260,18 @@ def constrained_decode_fn(
             vocab
         )
 
-
         if not list_ids:
             raise ValueError(
                 "No allowed tokens for"
                 f"param_index={param_index}, state={arg_state}"
             )
-    # Is the token id in list_id?,
-    # if NOT -inf (impossible to choose),
-    # if YES we keep its logit
-    for token_id in range (len(logits)):
-        if token_id not in list_ids:
-            logits[token_id] = float("-inf")
-    # Choose the permitted token with the max logit
-    index_max_logit: int = logits.index(max(logits))
+        for token_id in range(len(logits)):
+            if token_id not in list_ids:
+                logits[token_id] = float("-inf")
+        selected_token: int = logits.index(max(logits))
 
-    token_text = llm_model.decode([index_max_logit])
-    next_param_index, next_arg_state = get_next_state(
-        arg_state, param_index, param_names_and_types, token_text
-    )
-    return index_max_logit, next_param_index, next_arg_state
+        token_text = llm_model.decode([selected_token])
+        next_param_index, next_arg_state = get_next_state(
+            arg_state, param_index, param_names_and_types, token_text
+        )
+        return selected_token, next_param_index, next_arg_state
