@@ -50,6 +50,23 @@ def extract_parameters_from_json(
         raise ValueError(f"Failed to extract parameters from JSON: {e}")
 
 
+def build_prompt(
+        prompt: str,
+        function_definitions: list[FunctionDefinitionCheck]
+) -> str:
+    """Build the model prompt, listing the available functions."""
+    lines: list[str] = ["Available functions:"]
+    for func in function_definitions:
+        params = ",".join(
+            f"{name} ({param.type.value})"
+            for name, param in func.parameters.items()
+        )
+        lines.append(f"- {func.name}({params}): {func.description}")
+    lines.append(f"Question: {prompt}")
+    lines.append("Function:")
+    return "\n".join(lines)
+
+
 def generate_function_call(
         prompt: str,
         llm_model: Small_LLM_Model,
@@ -57,11 +74,14 @@ def generate_function_call(
         function_definitions: list[FunctionDefinitionCheck]
         ) -> tuple[str, dict[str, Any]]:
     """Generate function name and parameters for a single prompt."""
-    input_ids: list[int] = llm_model.encode(prompt).tolist()[0]
+    input_ids: list[int] = ( 
+                llm_model.encode(build_prompt(prompt, function_definitions)
+                ).tolist()[0]
+            )
     generate_ids: list[int] = []
     selected_function: str | None = None
 
-    while True:
+    for _ in range(50):
         logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
         next_token, _, _ = constrained_decode_fn(
             logits,
@@ -78,6 +98,9 @@ def generate_function_call(
 
         input_ids.append(next_token)
         generate_ids.append(next_token)
+
+    else:
+        raise ValueError("Function selection did not complete")
 
     if selected_function is None:
         raise ValueError("No function selected")
@@ -96,7 +119,7 @@ def generate_function_call(
     generate_ids = []
     param_index = 0
     arg_state = "start"
-    while True:
+    for _ in range(200):
         logits = llm_model.get_logits_from_input_ids(input_ids)
         next_token, param_index, arg_state = constrained_decode_fn(
             logits,
@@ -114,6 +137,8 @@ def generate_function_call(
 
         if arg_state == "end":
             break
+    else:
+        raise ValueError("Argument generation did not complete")
 
     decoded = llm_model.decode(generate_ids)
     parameters = extract_parameters_from_json(
