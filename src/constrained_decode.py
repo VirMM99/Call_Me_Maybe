@@ -197,10 +197,9 @@ def constrained_decode_fn(
         ) -> tuple[int, int, str]:
 
     list_ids: list[int] = []
-    vocab_path: str = llm_model.get_path_to_vocab_file()
-
-    with open(vocab_path, "r") as vocab_file:
-        vocab: dict[str, int] = json.load(vocab_file)
+    vocab: dict[str, int] = _load_vocab(
+            llm_model.get_path_to_vocad_file()
+    )
 
     eos_token_id: int = 128247
     if not logits:
@@ -222,13 +221,11 @@ def constrained_decode_fn(
 
             if generate_ids == token_ids:
                 list_ids.append(eos_token_id)
-                print("FUNCTION:", function_name)
-                print("TOKEN_IDS:", token_ids)
-                print("GENERATED:", generate_ids)
 
             elif generate_ids == token_ids[:len(generate_ids)]:
                 if len(generate_ids) < len(token_ids):
                     next_token: int = token_ids[len(generate_ids)]
+
                     list_ids.append(next_token)
 
         if not list_ids:
@@ -247,18 +244,20 @@ def constrained_decode_fn(
 
         if selected_definition is None:
             raise ValueError("Selected function was not found.")
-        # print("Parameters:", selected_definition.parameters)
 
         param_names_and_types = get_param_names_types(
             selected_definition)
 
+        decoded_so_far: str = llm_model.decode(generate_ids)
+
         list_ids = get_allowed_next_tokens(
-            param_index,
-            arg_state,
-            param_names_and_types,
-            llm_model,
-            vocab
-        )
+                    param_index,
+                    arg_state,
+                    param_names_and_types,
+                    llm_model,
+                    vocab,
+                    decoded_so_far
+                )
 
         if not list_ids:
             raise ValueError(
@@ -272,6 +271,7 @@ def constrained_decode_fn(
 
         token_text = llm_model.decode([selected_token])
         next_param_index, next_arg_state = get_next_state(
-            arg_state, param_index, param_names_and_types, token_text
+            arg_state, param_index, param_names_and_types,
+            token_text, decoded_so_far, llm_model
         )
         return selected_token, next_param_index, next_arg_state
