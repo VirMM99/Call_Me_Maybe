@@ -3,6 +3,8 @@ import json
 from .basemodels import FunctionDefinitionCheck
 
 _vocab_cache: dict[str, dict[str, int]] = {}
+_numeric_cache: dict[str, list[int]] = {}
+_string_cache: dict[str, list[int]] = {}
 
 def _load_vocab(vocab_path: str) -> dict[str, int]:
     if vocab_path not in _vocab_cache:
@@ -10,6 +12,30 @@ def _load_vocab(vocab_path: str) -> dict[str, int]:
             _vocab_cache[vocab_path] = json.load(f)
     return _vocab_cache[vocab_path]
 
+
+def _numeric_token_ids(
+        vocab_path: str, vocab: dict[str, int]) -> list[int]:
+    if vocab_path not in _numeric_cache:
+        _numeric_cache[vocab_path] = [
+            token_id
+            for token, token_id in vocab.items()
+            if token and all(
+                c.isdigit() or c in ".-" for c in token
+            )
+        ]
+    return _numeric_cache[vocab_path]
+
+
+def _string_token_ids(
+        vocab_path: str, vocab: dict[str, int]) -> list[int]:
+    if vocab_path not in _string_cache:
+        _string_cache[vocab_path] = [
+            token_id
+            for token, token_id in vocab.items()
+            if token and '"' not in token
+            and "\n" not in token and "\r" not in token
+        ]
+    return _string_cache[vocab_path]
 
 def get_allowed_tokens(
         text: str,
@@ -30,84 +56,69 @@ def get_param_names_types(
     ]
 
 
+def _matched_key_tokens(
+        key_ids: list[int],
+        generate_ids: list[int],
+    ) -> int:
+    """How many leading tokens of key_ids already appear at the end
+    of generate_ids."""
+    for k in range(min(len(key_ids), len(generate_ids)), 0, -1):
+        if generate_ids[-k:] == key_ids[:k]:
+            return k
+    return 0
+
+
 def get_allowed_next_tokens(
         param_index: int,
         arg_state: str,
         param_names_and_types: list[tuple[str, str]],
         llm_model: Small_LLM_Model,
         vocab: dict[str, int],
-        decoded_so_far: str,
+        vocab_path: str,
+        generate_ids: list[int],
         ) -> list[int]:
     """Return token IDs allowed based on explicit generation state."""
-
-    if not param_names_and_types:
-        return get_allowed_tokens("{}", llm_model)
+    num_params = len(param_names_and_types)
 
     if arg_state == "start":
         return get_allowed_tokens("{", llm_model)
 
     if arg_state == "key":
-        if param_index < len(param_names_and_types):
-            param_name = param_names_and_types[param_index][0]
-            full_key = f'"{param_name}":'
-            encoded_key = llm_model.encode(full_key).tolist()[0]
-            partial = llm_model.encode(
-                        decoded_so_far
-                    ).tolist()[0]
-            if partial == encoded_key[:len(partial)]:
-                if len(partial) == len(encoded_key):
-                    return get_allowed_tokens(":", llm_model)
-                next_token = encoded_key[len(partial)]
-                return [next_token]
-            return get_allowed_tokens(":", llm_model)
-        return []
+        if param_index <= num_params:
+            return []
+        param_name = param_names_and_types[param_index][0]
+        key_ids = llm_model.encode(f'"{param_name}":').tolist()[0]
 
-    if arg_state == "colon":
-        return get_allowed_tokens(":", llm_model)
+        matched = _matched_key_tokens(key_ids, generate_ids)
+        if matched >= len(key_ids):
+            return get_allowed_tokens(":", llm_model)
+        return[key_ids[matched]]
 
     if arg_state == "value":
-        if param_index >= len(param_names_and_types):
+        if param_index >= num_params:
             return []
         param_type = param_names_and_types[param_index][1]
-        if param_type == "number":
-            digit_tokens = [
-                token_id
-                for token, token_id in vocab.items()
-                if token and (token[0].isdigit()
-                            or token[0] == "-")
-            ]
-            if param_index == len(param_names_and_types) - 1:
-                extra = get_allowed_tokens("}", llm_model)
-            else:
-                extra = get_allowed_tokens(",", llm_model)
-            return digit_tokens + extra
         if param_type == "string":
             return get_allowed_tokens('"', llm_model)
+        if param_type == "number":
+            terminator = "}" if param_index == num_params - 1 else ","
+            return (
+                _numeric_token_ids(vocab_path, vocab)
+                + get_allowed_tokens (terminator, llm_model)
+            )
         return []
 
     if arg_state == "string_content":
-        return [
-            token_id
-            for token, token_id in vocab.items()
-            if token and "\n" not in token and (
-                '"' not in token or token.startswith('"')
-            )
-        ]
+        return (
+            _string_token_ids(vocab_path, vocab)
+            + get_allowed_tokens('"', llm_model)
+        )
 
-    if arg_state == "string_end":
-        if param_index == len(param_names_and_types) - 1:
+    if arg_state == "sep":
+        if param_index == num_params - 1:
             return get_allowed_tokens("}", llm_model)
-        else:
-            return get_allowed_tokens(",", llm_model)
-
-    if arg_state == "number_end":
-        if param_index == len(param_names_and_types) - 1:
-            return get_allowed_tokens("}", llm_model)
-        else:
-            return get_allowed_tokens(",", llm_model)
-
-    if arg_state == "comma":
         return get_allowed_tokens(",", llm_model)
+
     if arg_state == "end":
         return get_allowed_tokens("}", llm_model)
     return []
@@ -118,7 +129,7 @@ def get_next_state(
         param_index: int,
         param_names_and_types: list[tuple[str, str]],
         token_text: str,
-        decoded_so_far: str,
+        generate_ids: list[int],
         llm_model: Small_LLM_Model
         ) -> tuple[int, str]:
     """Determine next (param_index, arg_state) based on current
@@ -132,13 +143,12 @@ def get_next_state(
         if param_index >= num_params:
             return(param_index, "end")
         param_name = param_names_and_types[param_index][0]
-        full_key = f'"{param_name}":'
-        if decoded_so_far.endswith(full_key):
-            return (param_index, "value")
-        return (param_index, "key")
+        key_ids = llm_model.encode(f'"{param_name}":').tolist()[0]
 
-    if current_state == "colon":
-        return (param_index, "value")
+        matched = _matched_key_tokens(key_ids, generate_ids)
+        if matched >= len(key_ids):
+            return(param_index, "value")
+        return (param_index, "key")
 
     if current_state == "value":
         if param_index >= num_params:
@@ -149,35 +159,24 @@ def get_next_state(
                 return (param_index, "string_content")
             return (param_index, "value")
         if param_type == "number":
-            if token_text == ",":
-                return (param_index + 1, "key")
+            if token_text == "}":
+                return (param_index, "key")
             if token_text == "}":
                 return (param_index, "end")
-            if token_text and (token_text[-1].isdigit()
-                                or token_text[-1] == "."):
-                return (param_index, "value")
+            if token_text == ",":
+                return (param_index + 1, "key")
             return (param_index, "value")
         return (param_index, "value")
 
     if current_state == "string_content":
-        if token_text.startswith('"'):
-            return(param_index, "string_end")
+        if token_text == '"':
+            return(param_index, "sep")
         return (param_index, "string_content")
 
-    if current_state == "string_end":
-        if param_index == num_params - 1:
+    if current_state == "sep":
+        if token_text == num_params - 1:
             return (param_index, "end")
-        else:
-            return (param_index + 1, "key")
-
-    if current_state == "number_end":
-        if param_index == num_params - 1:
-            return (param_index, "end")
-        else:
-            return (param_index + 1, "key")
-
-    if current_state == "comma":
-        return (param_index, "key")
+        return (param_index + 1, "key")
 
     if current_state == "end":
         return (param_index, "end")
@@ -197,9 +196,8 @@ def constrained_decode_fn(
         ) -> tuple[int, int, str]:
 
     list_ids: list[int] = []
-    vocab: dict[str, int] = _load_vocab(
-            llm_model.get_path_to_vocad_file()
-    )
+    vocad_path: str = llm_model.get_path_to_vocad_file()
+    vocab: dict[str, int] = _load_vocab(vocad_path)
 
     eos_token_id: int = 128247
     if not logits:
@@ -256,7 +254,8 @@ def constrained_decode_fn(
                     param_names_and_types,
                     llm_model,
                     vocab,
-                    decoded_so_far
+                    vocad_path,
+                    generate_ids
                 )
 
         if not list_ids:
@@ -270,8 +269,9 @@ def constrained_decode_fn(
         selected_token: int = logits.index(max(logits))
 
         token_text = llm_model.decode([selected_token])
+        new_generate_ids = generate_ids + [selected_token]
         next_param_index, next_arg_state = get_next_state(
             arg_state, param_index, param_names_and_types,
-            token_text, decoded_so_far, llm_model
+            token_text, new_generate_ids, llm_model
         )
         return selected_token, next_param_index, next_arg_state

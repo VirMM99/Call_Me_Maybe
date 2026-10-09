@@ -112,12 +112,14 @@ def generate_function_call(
         input_ids.append(next_token)
         generate_ids.append(next_token)
 
-        decoded = llm_model.decode(generate_ids)
-        if decoded.endswith("}"):
-            parameters = extract_parameters_from_json(
-                decoded, selected_definition
-            )
-            return selected_function, parameters
+        if arg_state == "end":
+            break
+
+    decoded = llm_model.decode(generate_ids)
+    parameters = extract_parameters_from_json(
+            decoded, selected_definition
+        )
+    return selected_function, parameters
 
 
 def main() -> int:
