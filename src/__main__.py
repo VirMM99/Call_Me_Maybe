@@ -5,10 +5,9 @@ import json
 import os
 import sys
 from typing import Any
-
 from llm_sdk import Small_LLM_Model
 from .file_loader import load_fn_definitions, load_prompts, ParsingFileError
-from .basemodels import FunctionDefinitionCheck, PromptItem
+from .basemodels import FunctionDefinitionCheck, PromptItem, FunctionCallOutput
 from .constrained_decode import constrained_decode_fn
 from .validator import validate_function_call
 
@@ -76,6 +75,7 @@ def generate_function_call(
         if next_token == 128247:
             selected_function = llm_model.decode(generate_ids)
             break
+
         input_ids.append(next_token)
         generate_ids.append(next_token)
 
@@ -89,7 +89,9 @@ def generate_function_call(
             break
 
     if selected_definition is None:
-        raise ValueError(f"Function definition not found: {selected_function}")
+        raise ValueError(
+            f"Function definition not found: {selected_function}"
+            )
 
     generate_ids = []
     param_index = 0
@@ -116,8 +118,6 @@ def generate_function_call(
                 decoded, selected_definition
             )
             return selected_function, parameters
-
-    raise ValueError("Failed to generate complete JSON")
 
 
 def main() -> int:
@@ -171,7 +171,11 @@ def main() -> int:
                 f for f in loaded_functions if f.name == fn_name
             )
             validate_function_call(
-                type("obj", (), {"name": fn_name, "parameters": parameters})(),
+                FunctionCallOutput(
+                    prompt=prompt,
+                    name=fn_name,
+                    parameters=parameters
+                ),
                 selected_def
             )
             print(f"OK: {prompt} -> {fn_name}({parameters})")
