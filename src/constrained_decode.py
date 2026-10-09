@@ -84,7 +84,7 @@ def get_allowed_next_tokens(
         return get_allowed_tokens("{", llm_model)
 
     if arg_state == "key":
-        if param_index <= num_params:
+        if param_index >= num_params:
             return []
         param_name = param_names_and_types[param_index][0]
         key_ids = llm_model.encode(f'"{param_name}":').tolist()[0]
@@ -160,8 +160,6 @@ def get_next_state(
             return (param_index, "value")
         if param_type == "number":
             if token_text == "}":
-                return (param_index, "key")
-            if token_text == "}":
                 return (param_index, "end")
             if token_text == ",":
                 return (param_index + 1, "key")
@@ -174,7 +172,7 @@ def get_next_state(
         return (param_index, "string_content")
 
     if current_state == "sep":
-        if token_text == num_params - 1:
+        if param_index == num_params - 1:
             return (param_index, "end")
         return (param_index + 1, "key")
 
@@ -196,8 +194,8 @@ def constrained_decode_fn(
         ) -> tuple[int, int, str]:
 
     list_ids: list[int] = []
-    vocad_path: str = llm_model.get_path_to_vocad_file()
-    vocab: dict[str, int] = _load_vocab(vocad_path)
+    vocab_path: str = llm_model.get_path_to_vocab_file()
+    vocab: dict[str, int] = _load_vocab(vocab_path)
 
     eos_token_id: int = 128247
     if not logits:
@@ -254,7 +252,7 @@ def constrained_decode_fn(
                     param_names_and_types,
                     llm_model,
                     vocab,
-                    vocad_path,
+                    vocab_path,
                     generate_ids
                 )
 
