@@ -115,6 +115,8 @@ def generate_function_call(
         raise ValueError(
             f"Function definition not found: {selected_function}"
             )
+    input_ids = llm_model.encode(prompt).tolist()[0]
+    input_ids += llm_model.encode(selected_function).tolist()[0]
 
     generate_ids = []
     param_index = 0
