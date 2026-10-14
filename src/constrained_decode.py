@@ -33,7 +33,10 @@ def _string_token_ids(
             token_id
             for token, token_id in vocab.items()
             if token and '"' not in token
-            and "\n" not in token and "\r" not in token
+            #  ĉ, Ċ, č
+            and not any(c in token for c in '\u0109\u010a\u010d')
+            #  # Ġ (space)
+            and token.count('\u0120') < 2
         ]
     return _string_cache[vocab_path]
 
@@ -100,7 +103,7 @@ def get_allowed_next_tokens(
         param_type = param_names_and_types[param_index][1]
         if param_type == "string":
             return get_allowed_tokens('"', llm_model)
-        if param_type == "number":
+        if param_type in ("number", "integer"):
             terminator = "}" if param_index == num_params - 1 else ","
             return (
                 _numeric_token_ids(vocab_path, vocab)
@@ -158,7 +161,7 @@ def get_next_state(
             if token_text == '"':
                 return (param_index, "string_content")
             return (param_index, "value")
-        if param_type == "number":
+        if param_type in ("number", "integer"):
             if token_text == "}":
                 return (param_index, "end")
             if token_text == ",":

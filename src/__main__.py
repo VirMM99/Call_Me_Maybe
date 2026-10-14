@@ -42,12 +42,28 @@ def extract_parameters_from_json(
     """Parse generated JSON text and extract parameters dict."""
     try:
         parsed = json.loads(json_text)
-        return {
-            name: parsed[name]
-            for name in function_def.parameters.keys()
-        }
+        params: dict[str, Any] = {}
+        for name, param in function_def.parameters.items():
+            value = parsed[name]
+            if param.type.value == "number":
+                value = float(value)
+            elif param.type.value == "integer":
+                value = int(value)
+            params[name] = value
+        return params
     except (json.JSONDecodeError, KeyError) as e:
         raise ValueError(f"Failed to extract parameters from JSON: {e}")
+
+
+def normalize_string_value(value:str, prompt: str, fn_name: str) -> str:
+    """remove a leaked function name and prefer the prompt's exact casting"""
+    if value.endswith(fn_name):
+        value = value[: -len(fn_name)]
+    low = value.lower()
+    idx = prompt.lower().find(low)
+    if idx != -1:
+        value = prompt[idx: idx + len(value)]
+    return value
 
 
 def build_prompt(
@@ -146,6 +162,10 @@ def generate_function_call(
     parameters = extract_parameters_from_json(
             decoded, selected_definition
         )
+    for name, param in selected_definition.parameters.items():
+        if param.type.value == "string":
+            parameters[name] = normalize_string_value(
+                parameters[name], prompt, selected_definition)
     return selected_function, parameters
 
 
