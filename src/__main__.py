@@ -152,6 +152,11 @@ def generate_function_call(
 
         input_ids.append(next_token)
         generate_ids.append(next_token)
+        # print(
+        #     f"param_index={param_index}, "
+        #     f"arg_state={arg_state}, "
+        #     f"generated={llm_model.decode(generate_ids)!r}"
+        # )
 
         if arg_state == "end":
             break

@@ -118,10 +118,22 @@ def get_allowed_next_tokens(
         return []
 
     if arg_state == "string_content":
-        return (
-            _string_token_ids(vocab_path, vocab)
-            + get_allowed_tokens('"', llm_model)
-        )
+        quote_ids = get_allowed_tokens('"', llm_model)
+        content_ids = _string_token_ids(vocab_path, vocab)
+
+        # limited numbers of tokens generated
+        quote_token_ids = set(quote_ids)
+        content_ids = [
+            token_id for token_id in content_ids
+            if token_id not in quote_token_ids
+        ]
+        generate_text = llm_model.decode(generate_ids)
+
+        # if the chain is too large, we force the close
+        current_string = generate_text.rsplit('"', 1)[-1]
+        if len(current_string) >= 100:
+            return quote_ids
+        return content_ids + quote_ids
 
     if arg_state == "sep":
         if param_index == num_params - 1:
@@ -151,10 +163,11 @@ def get_next_state(
     if current_state == "key":
         if param_index >= num_params:
             return(param_index, "end")
+
         param_name = param_names_and_types[param_index][0]
         key_ids = llm_model.encode(f'"{param_name}":').tolist()[0]
-
         matched = _matched_key_tokens(key_ids, generate_ids)
+
         if matched >= len(key_ids):
             return(param_index, "value")
         return (param_index, "key")
@@ -162,9 +175,11 @@ def get_next_state(
     if current_state == "value":
         if param_index >= num_params:
             return (param_index, "end")
+
         param_type = param_names_and_types[param_index][1]
         if param_type == "string":
-            if token_text == '"':
+            quote_ids = llm_model.encode('"').tolist()[0]
+            if generate_ids[-len(quote_ids):] == quote_ids:
                 return (param_index, "string_content")
             return (param_index, "value")
         if param_type in ("number", "integer"):
@@ -176,7 +191,8 @@ def get_next_state(
         return (param_index, "value")
 
     if current_state == "string_content":
-        if token_text == '"':
+        quote_ids = llm_model.encode('"').tolist()[0]
+        if generate_ids[-len(quote_ids):] == quote_ids:
             return(param_index, "sep")
         return (param_index, "string_content")
 
@@ -278,6 +294,11 @@ def constrained_decode_fn(
         selected_token: int = logits.index(max(logits))
 
         token_text = llm_model.decode([selected_token])
+        print(
+                f"state={arg_state}, "
+                f"token_id={selected_token}, "
+                f"token_text={token_text!r}"
+            )
         new_generate_ids = generate_ids + [selected_token]
         next_param_index, next_arg_state = get_next_state(
             arg_state, param_index, param_names_and_types,
