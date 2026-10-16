@@ -1,5 +1,12 @@
 # Call Me Maybe - Agent Reference
 
+## AI Agent Instructions
+**MANDATORY**: At the start of every new session, you MUST read all project files in `src/` and `data/input/` before responding to any prompt. Do not answer until you have reviewed the codebase.
+
+**IMPORTANT**: The user writes the code. You (the AI agent) do NOT modify any files. You only analyze, explain, and guide. The user will implement all changes.
+
+---
+
 ## Project Goal
 Build a function calling system using **constrained decoding** with Qwen/Qwen3-0.6B to translate natural language prompts into structured function calls with **100% valid JSON output**.
 

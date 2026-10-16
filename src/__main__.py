@@ -97,7 +97,7 @@ def generate_function_call(
     generate_ids: list[int] = []
     selected_function: str | None = None
 
-    for _ in range(50):
+    for _ in range(15):
         logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
         next_token, _, _ = constrained_decode_fn(
             logits,
@@ -137,7 +137,7 @@ def generate_function_call(
     generate_ids = []
     param_index = 0
     arg_state = "start"
-    for _ in range(200):
+    for _ in range(80):
         logits = llm_model.get_logits_from_input_ids(input_ids)
         next_token, param_index, arg_state = constrained_decode_fn(
             logits,
@@ -165,7 +165,7 @@ def generate_function_call(
     for name, param in selected_definition.parameters.items():
         if param.type.value == "string":
             parameters[name] = normalize_string_value(
-                parameters[name], prompt, selected_definition)
+                parameters[name], prompt, selected_function)
     return selected_function, parameters
 
 

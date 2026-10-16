@@ -5,6 +5,12 @@ from .basemodels import FunctionDefinitionCheck
 _vocab_cache: dict[str, dict[str, int]] = {}
 _numeric_cache: dict[str, list[int]] = {}
 _string_cache: dict[str, list[int]] = {}
+_structural_cache: dict[str, list[int]] = {}
+
+def _get_cached_tokens(text: str, llm_model: Small_LLM_Model) -> list[int]:
+    if text not in _structural_cache:
+        _structural_cache[text] = llm_model.encode(text).tolist()[0]
+    return _structural_cache[text]
 
 def _load_vocab(vocab_path: str) -> dict[str, int]:
     if vocab_path not in _vocab_cache:
@@ -44,8 +50,8 @@ def get_allowed_tokens(
         text: str,
         llm_model: Small_LLM_Model,
         ) -> list[int]:
-    """Return the token IDs corresponding to the given text."""
-    return llm_model.encode(text).tolist()[0]
+    """Return the token IDs corresponding to the given text (cached)."""
+    return _get_cached_tokens(text, llm_model)
 
 
 def get_param_names_types(
