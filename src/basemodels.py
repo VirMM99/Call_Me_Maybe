@@ -7,7 +7,8 @@ class ParameterType(str, Enum):
     """Supported parameter types"""
     STRING = "string"
     NUMBER = "number"
-    INTEGER = "integer"
+    INTEGER = "integer"´
+    BOOL = "boolean"
 
 
 class ParameterDefinition(BaseModel):

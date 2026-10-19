@@ -35,8 +35,16 @@ def is_valid_parameter_type(
                 # We put bool coz python can see it as numbers
                 and not isinstance(value, bool)
                 )
+    if expected_type == "integer":
+        # An int has to be extricly an int and not float/bool
+        return (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+        )
     if expected_type == "string":
         return isinstance(value, str)
+    if expected_type == "boolean":
+        return isinstance(value, bool)
     return False
 
 
