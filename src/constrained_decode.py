@@ -7,10 +7,12 @@ _numeric_cache: dict[str, list[int]] = {}
 _string_cache: dict[str, list[int]] = {}
 _structural_cache: dict[str, list[int]] = {}
 
+
 def _get_cached_tokens(text: str, llm_model: Small_LLM_Model) -> list[int]:
     if text not in _structural_cache:
         _structural_cache[text] = llm_model.encode(text).tolist()[0]
     return _structural_cache[text]
+
 
 def _load_vocab(vocab_path: str) -> dict[str, int]:
     if vocab_path not in _vocab_cache:
@@ -31,20 +33,35 @@ def _numeric_token_ids(
         ]
     return _numeric_cache[vocab_path]
 
-
+#LLM find the tokens that have '""
 def _string_token_ids(
         vocab_path: str, vocab: dict[str, int]) -> list[int]:
+    # We forced to clean the cache
+    if vocab_path in _string_cache:
+        del _string_cache[vocab_path]
+
     if vocab_path not in _string_cache:
-        _string_cache[vocab_path] = [
-            token_id
-            for token, token_id in vocab.items()
-            if token and '"' not in token
-            #  ĉ, Ċ, č
-            and not any(c in token for c in '\u0109\u010a\u010d')
-            #  # Ġ (space)
-            and token.count('\u0120') < 2
-        ]
-    return _string_cache[vocab_path]
+        valid_ids = []
+        for token, token_id in vocab.items():
+            if not token:
+                continue
+            # Ġ (space)
+            if token.count('\u0120') <= 2:
+                continue
+    
+            if '"' not in token:
+                valid_ids.append(token_id)
+            else:
+                parts = token.split('"')
+                if len(parts) == 2:
+                    after_quote = parts[1]
+                    allowed_structural = set(", \n\t}")
+                    if all(c in allowed_structural for c in after_quote):
+                        valid_ids.append(token_id)
+
+            _string_cache[vocab_path] = valid_ids
+        return _string_cache[vocab_path]
+
 
 def get_allowed_tokens(
         text: str,
@@ -68,7 +85,7 @@ def get_param_names_types(
 def _matched_key_tokens(
         key_ids: list[int],
         generate_ids: list[int],
-    ) -> int:
+        ) -> int:
     """How many leading tokens of key_ids already appear at the end
     of generate_ids."""
     for k in range(min(len(key_ids), len(generate_ids)), 0, -1):
@@ -127,12 +144,12 @@ def get_allowed_next_tokens(
             token_id for token_id in content_ids
             if token_id not in quote_token_ids
         ]
-        generate_text = llm_model.decode(generate_ids)
 
-        # if the chain is too large, we force the close
-        current_string = generate_text.rsplit('"', 1)[-1]
-        if len(current_string) >= 100:
-            return quote_ids
+        # generate_text = llm_model.decode(generate_ids)
+        # # if the chain is too large, we force the close
+        # current_string = generate_text.rsplit('"', 1)[-1]
+        # if len(current_string) >= 100:
+        #     return quote_ids
         return content_ids + quote_ids
 
     if arg_state == "sep":
@@ -141,7 +158,9 @@ def get_allowed_next_tokens(
         return get_allowed_tokens(",", llm_model)
 
     if arg_state == "end":
-        return get_allowed_tokens("}", llm_model)
+        eos_token_id: int = 128247
+        # We let the key of final clousure 0 the last token in sequence(EOS)
+        return get_allowed_tokens("}", llm_model) + [eos_token_id]
     return []
 
 
@@ -190,20 +209,24 @@ def get_next_state(
             return (param_index, "value")
         return (param_index, "value")
 
-    if current_state == "string_content":
-        quote_ids = llm_model.encode('"').tolist()[0]
-        if generate_ids[-len(quote_ids):] == quote_ids:
-            return(param_index, "sep")
-        return (param_index, "string_content")
+    if current_state == "end":
+        return (param_index, "end")
 
     if current_state == "sep":
         if param_index == num_params - 1:
             return (param_index, "end")
         return (param_index + 1, "key")
 
-    if current_state == "end":
-        return (param_index, "end")
-
+    if current_state == "string_content":
+        if '"' in token_text:
+            if "," in token_text:
+                if param_index >= num_params - 1:
+                    return (param_index, "end")
+                return (param_index + 1, "key")
+            # if token only have quotation mark
+            # then we go to sep, it can put the comma in the next step
+            return(param_index, "sep")
+        return (param_index, "string_content")
     return (param_index, "end")
 
 
