@@ -8,8 +8,9 @@ from typing import Any
 from llm_sdk import Small_LLM_Model
 from .file_loader import load_fn_definitions, load_prompts, ParsingFileError
 from .basemodels import FunctionDefinitionCheck, PromptItem, FunctionCallOutput
-from .constrained_decode import constrained_decode_fn
+from .constrained_decode import constrained_decode_function_name, constrained_decode_parameters
 from .validator import validate_function_call
+import time
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,7 +56,7 @@ def extract_parameters_from_json(
         raise ValueError(f"Failed to extract parameters from JSON: {e}")
 
 
-def normalize_string_value(value:str, prompt: str, fn_name: str) -> str:
+def normalize_string_value(value: str, prompt: str, fn_name: str) -> str:
     """remove a leaked function name and prefer the prompt's exact casting"""
     if value.endswith(fn_name):
         value = value[: -len(fn_name)]
@@ -83,6 +84,32 @@ def build_prompt(
     return "\n".join(lines)
 
 
+def build_prompt_param(
+        prompt: str,
+        fn_name: str,
+        fn_description: str,
+        fn_parameters: dict
+) -> str:
+    """This create the estructured context text
+    for the generation phase of parameters
+    """
+    # We format the params of the function so LLM knows what is coming
+    params_info = ", ".join([
+        f"{name}: {param.type.value}"
+        for name, param in fn_parameters.items()
+    ]) 
+
+    # Clear structure that guides the model to 
+    # the generation of the JSON of arguments
+    return (
+        f"Using this function"
+        f"{fn_name}({params_info})\n"
+        f"Function description: {fn_description}\n"
+        f"Provide the arguments to solve user prompt in JSON format:\n"
+        f'[\n{{\n"prompt": "{prompt}",\n'
+        f'"name": "{fn_name}",\n"parameters":\n{{'
+    )
+
 def generate_function_call(
         prompt: str,
         llm_model: Small_LLM_Model,
@@ -97,15 +124,19 @@ def generate_function_call(
     generate_ids: list[int] = []
     selected_function: str | None = None
 
+    # PRINT DE DEBUGEO: CONTEXTO INICIAL PARA BUSCAR EL NOMBRE DE LA FUNCION:
+    print("\n//////// Contexto inicial para encontrar FN_NAME:")
+    for i in input_ids:
+        print(llm_model.decode([i]), end="")
+    # fin print
+    # this for is to find the name of the function with a specific function
     for _ in range(15):
         logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
-        next_token, _, _ = constrained_decode_fn(
+        next_token, _, _ = constrained_decode_function_name(
             logits,
             list_fn_name,
-            function_definitions,
             llm_model,
-            generate_ids,
-            selected_function
+            generate_ids
         )
 
         if next_token == 128247:
@@ -131,17 +162,29 @@ def generate_function_call(
         raise ValueError(
             f"Function definition not found: {selected_function}"
             )
-    input_ids = llm_model.encode(prompt).tolist()[0]
-    input_ids += llm_model.encode(selected_function).tolist()[0]
+
+    # We use build_promt_param to find the context of params
+    prompt_param_text = build_prompt_param(
+        prompt,
+        selected_definition.name,
+        selected_definition.description,
+        selected_definition.parameters
+    )
+
+    input_ids = llm_model.encode(prompt_param_text).tolist()[0]
 
     generate_ids = []
     param_index = 0
     arg_state = "start"
     for _ in range(80):
         logits = llm_model.get_logits_from_input_ids(input_ids)
-        next_token, param_index, arg_state = constrained_decode_fn(
+        # print debugueo
+        print("\n//////// Contexto para encontrar parametros (token a token):")
+        for i in input_ids:
+            print(llm_model.decode([i]), end="")
+        #Fin del print
+        next_token, param_index, arg_state = constrained_decode_parameters(
             logits,
-            list_fn_name,
             function_definitions,
             llm_model,
             generate_ids,
@@ -152,11 +195,6 @@ def generate_function_call(
 
         input_ids.append(next_token)
         generate_ids.append(next_token)
-        # print(
-        #     f"param_index={param_index}, "
-        #     f"arg_state={arg_state}, "
-        #     f"generated={llm_model.decode(generate_ids)!r}"
-        # )
 
         if arg_state == "end":
             break
@@ -164,13 +202,19 @@ def generate_function_call(
         raise ValueError("Argument generation did not complete")
 
     decoded = llm_model.decode(generate_ids)
+
+    # This two whiles clean extra char.
+    # Now LLM can find and select tokens that I have
+    # banned before
+    while decoded.endswith("}}"):
+        decoded = decoded[:-1]
+    while decoded.endswith(","):
+            decoded = decoded[:-1] + '}'
+    
     parameters = extract_parameters_from_json(
             decoded, selected_definition
         )
-    for name, param in selected_definition.parameters.items():
-        if param.type.value == "string":
-            parameters[name] = normalize_string_value(
-                parameters[name], prompt, selected_function)
+    
     return selected_function, parameters
 
 
@@ -203,6 +247,8 @@ def main() -> int:
         os.makedirs(output_dir, exist_ok=True)
 
     results: list[dict[str, Any]] = []
+
+    init_time: float = time.perf_counter()
 
     for test in test_prompts:
         prompt = test.prompt
@@ -245,9 +291,18 @@ def main() -> int:
     except OSError as e:
         print(f"Error writing output file: {e}", file=sys.stderr)
         return 1
+    final_program_time: float = time.perf_counter()
+    final_duration = final_program_time - init_time
+    print(
+        f"Total time processing all prompts: "
+        f"{final_duration:.2f} seconds"
+    )
 
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("YOU ARE THE PROBLEM")
