@@ -291,11 +291,11 @@ def constrained_decode_parameters(
     vocab_path: str = llm_model.get_path_to_vocab_file()
     vocab: dict[str, int] = _load_vocab(vocab_path)
 
-    # Print de prueba
-    print("\n//// GENERATED IDS:")
-    for i in generate_ids:
-        print(llm_model.decode([i]), end=" ")
-    # FIN DE PRUEBA
+    # # Print de prueba
+    # print("\n//// GENERATED IDS:")
+    # for i in generate_ids:
+    #     print(llm_model.decode([i]), end=" ")
+    # # FIN DE PRUEBA
 
     selected_definition = None
     for function in function_definitions:
@@ -323,16 +323,16 @@ def constrained_decode_parameters(
             f"state={arg_state}"
         )
 
-    # Prueba debugueo: 1. We associate each token_id with their logit,
-    # sorting them from major to minor
-    # and we take the first 5
-    top_5 = sorted(enumerate(logits), key=lambda x: x[1], reverse=True)[:5]
-    # 2. We go around them to print them
-    print("\nTop 5 tokens más probables:")
-    for token_id, score in top_5:
-        token_text = llm_model.decode([token_id])
-        print(f"Token ID: {token_id} | Score: {score:.2f} | Texto: {token_text!r}")
-    # End of debug
+    # # Prueba debugueo: 1. We associate each token_id with their logit,
+    # # sorting them from major to minor
+    # # and we take the first 5
+    # top_5 = sorted(enumerate(logits), key=lambda x: x[1], reverse=True)[:5]
+    # # 2. We go around them to print them
+    # print("\nTop 5 tokens más probables:")
+    # for token_id, score in top_5:
+    #     token_text = llm_model.decode([token_id])
+    #     print(f"Token ID: {token_id} | Score: {score:.2f} | Texto: {token_text!r}")
+    # # End of debug
 
     selected_token = _apply_logit_mask(logits, list_ids)
     token_text = llm_model.decode([selected_token])

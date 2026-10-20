@@ -124,11 +124,12 @@ def generate_function_call(
     generate_ids: list[int] = []
     selected_function: str | None = None
 
-    # PRINT DE DEBUGEO: CONTEXTO INICIAL PARA BUSCAR EL NOMBRE DE LA FUNCION:
-    print("\n//////// Contexto inicial para encontrar FN_NAME:")
-    for i in input_ids:
-        print(llm_model.decode([i]), end="")
-    # fin print
+    # # PRINT DE DEBUGEO: CONTEXTO INICIAL PARA BUSCAR EL NOMBRE DE LA FUNCION:
+    # print("\n//////// Contexto inicial para encontrar FN_NAME:")
+    # for i in input_ids:
+    #     print(llm_model.decode([i]), end="")
+    # # fin print
+
     # this for is to find the name of the function with a specific function
     for _ in range(15):
         logits: list[float] = llm_model.get_logits_from_input_ids(input_ids)
@@ -178,11 +179,12 @@ def generate_function_call(
     arg_state = "start"
     for _ in range(80):
         logits = llm_model.get_logits_from_input_ids(input_ids)
-        # print debugueo
-        print("\n//////// Contexto para encontrar parametros (token a token):")
-        for i in input_ids:
-            print(llm_model.decode([i]), end="")
-        #Fin del print
+        # # print debugueo
+        # print("\n//////// Contexto para encontrar parametros (token a token):")
+        # for i in input_ids:
+        #     print(llm_model.decode([i]), end="")
+        # #Fin del print
+
         next_token, param_index, arg_state = constrained_decode_parameters(
             logits,
             function_definitions,
