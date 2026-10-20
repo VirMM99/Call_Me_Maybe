@@ -26,43 +26,154 @@ The key innovation is **constrained decoding**: at each token generation step, t
 
 ## Instructions
 
-### Prerequisites
-- Python 3.10+
-- `uv` package manager
-
 ### Installation
+
+The project uses `uv` for dependency and virtual environment management.
+
+Install all dependencies with:
+
+```bash
+make install
+```
+
+or directly with:
+
 ```bash
 uv sync
 ```
 
-This installs dependencies (`pydantic`, `numpy`, `llm_sdk`) and downloads the Qwen/Qwen3-0.6B model.
+### 42 Campus storage note
 
-### Running
+On some 42 campus machines, the home directory may have very limited disk space.
+
+If `uv` is installed in `~/.local/bin` but `make` cannot find it, temporarily add that directory to the current shell `PATH`:
+
 ```bash
-# Default input/output paths
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+You can verify that `uv` is available with:
+
+```bash
+which uv
+uv --version
+```
+
+If `uv sync`, `make install`, or model loading fails with an error similar to:
+
+```text
+No space left on device
+```
+
+the `uv` cache, the project virtual environment, and the Hugging Face model cache can be stored in `sgoinfre` instead of the home directory.
+
+First, create the required directories:
+
+```bash
+mkdir -p /sgoinfre/students/$USER/uv-cache
+mkdir -p /sgoinfre/students/$USER/venvs/call_me_maybe
+mkdir -p /sgoinfre/students/$USER/huggingface
+```
+
+Configure `uv` and Hugging Face to use `sgoinfre`:
+
+```bash
+export UV_CACHE_DIR=/sgoinfre/students/$USER/uv-cache
+export HF_HOME=/sgoinfre/students/$USER/huggingface
+```
+
+If a previous installation attempt created a local `.venv`, remove it:
+
+```bash
+rm -rf .venv
+```
+
+Then create a symbolic link so that the project still sees a normal `.venv` directory while the actual virtual environment is stored in `sgoinfre`:
+
+```bash
+ln -s /sgoinfre/students/$USER/venvs/call_me_maybe .venv
+```
+
+Install the project dependencies normally:
+
+```bash
+make install
+```
+
+To verify that the virtual environment is correctly linked:
+
+```bash
+ls -ld .venv
+```
+
+It should point to a path similar to:
+
+```text
+.venv -> /sgoinfre/students/<login>/venvs/call_me_maybe
+```
+
+The model files downloaded by Hugging Face will now be stored under:
+
+```text
+/sgoinfre/students/<login>/huggingface
+```
+
+instead of the home directory.
+
+Then run:
+
+```bash
+make run
+```
+
+These environment variables only change where dependency caches and model files are stored. They do not modify the project behavior, source code, or repository contents.
+
+The `export` commands apply to the current shell session. If a new terminal session is opened, they may need to be set again.
+
+
+### Running the program
+
+The program can be executed using the default input and output paths:
+
+```bash
 uv run python -m src
-
-# Custom paths
-uv run python -m src \
-  --functions_definition data/input/functions_definition.json \
-  --input data/input/function_calling_tests.json \
-  --output data/output/function_calling_results.json
 ```
 
-### Output
-Results are written to `data/output/function_calling_results.json` as a JSON array:
-```json
-[
-  {
-    "prompt": "What is the sum of 2 and 3?",
-    "name": "fn_add_numbers",
-    "parameters": {"a": 2.0, "b": 3.0}
-  }
-]
-```
+or:
 
-### Development Commands
 ```bash
+make run
+```
+
+The default files are:
+
+```text
+data/input/functions_definition.json
+data/input/function_calling_tests.json
+data/output/function_calling_results.json
+```
+
+Custom files can be provided through command-line arguments:
+
+```bash
+uv run python -m src \
+    --functions_definition path/to/functions_definition.json \
+    --input path/to/function_calling_tests.json \
+    --output path/to/results.json
+```
+
+The maximum number of tokens allowed during generation can also be changed:
+
+```bash
+uv run python -m src --limit 300
+```
+
+The default token limit is `500`.
+
+### Makefile
+
+The Makefile provides the following rules:
+
 make install   # Install dependencies
 make run       # Run the program
 make debug     # Run with pdb debugger
