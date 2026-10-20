@@ -338,11 +338,11 @@ def constrained_decode_parameters(
     token_text = llm_model.decode([selected_token])
 
     # This is the code to show Status
-    print(
-        f"state={arg_state}, "
-        f"token_id={selected_token}, "
-        f"token_text={token_text!r}"
-    )
+    # print(
+    #     f"state={arg_state}, "
+    #     f"token_id={selected_token}, "
+    #     f"token_text={token_text!r}"
+    # )
 
     new_generate_ids = generate_ids + [selected_token]
     next_param_index, next_arg_state = get_next_state(
