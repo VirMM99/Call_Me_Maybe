@@ -266,7 +266,7 @@ def constrained_decode_function_name(
 
         if generate_ids == token_ids:
             list_ids.append(eos_token_id)
-        elif generate_ids == token_ids:
+        elif generate_ids == token_ids[:len(generate_ids)]:
             if len(generate_ids) < len(token_ids):
                 list_ids.append(token_ids[len(generate_ids)])
 
