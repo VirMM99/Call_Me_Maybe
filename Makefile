@@ -5,10 +5,10 @@ MYPY_FLAGS := --python-version 3.10 \
             --disallow-untyped-defs \
             --check-untyped-defs
 
+# Ensures that the base is used in a compatible way
+SHELL := /bin/bash
 
 # Creates a virtual environment and installs the project dependencies.
-# A venv is used because campus Python installations are often
-# "externally managed" (PEP 668) and reject global pip installs.
 install:
     uv sync
 
@@ -24,11 +24,13 @@ debug:
 clean:
     find . -type d -name "__pycache__" -exec rm -rf {} +
     rm -rf .mypy_cache
+    rm -rf .venv
 
 # Mandatory lint: flake8 + mypy with the exact flags required by the subject
 lint:
 	uv run flake8 .
 	uv run mypy . $(MYPY_FLAGS)
+
 # Optional stricter lint (mypy --strict)
 lint-strict:
 	uv run flake8 .
