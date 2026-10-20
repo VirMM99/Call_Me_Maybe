@@ -35,7 +35,8 @@ def _numeric_token_ids(
 
 #LLM find the tokens that have '""
 def _string_token_ids(
-        vocab_path: str, vocab: dict[str, int]) -> list[int]:
+        vocab_path: str, vocab: dict[str, int]
+        ) -> list[int]:
     # We forced to clean the cache
     if vocab_path in _string_cache:
         del _string_cache[vocab_path]
@@ -45,8 +46,11 @@ def _string_token_ids(
         for token, token_id in vocab.items():
             if not token:
                 continue
+            #  ĉ, Ċ, č
+            if any(c in token for c in '\u0109\u010a\u010d'):
+                continue
             # Ġ (space)
-            if token.count('\u0120') <= 2:
+            if token.count('\u0120') >= 2:
                 continue
     
             if '"' not in token:
@@ -59,8 +63,8 @@ def _string_token_ids(
                     if all(c in allowed_structural for c in after_quote):
                         valid_ids.append(token_id)
 
-            _string_cache[vocab_path] = valid_ids
-        return _string_cache[vocab_path]
+        _string_cache[vocab_path] = valid_ids
+    return _string_cache[vocab_path]
 
 
 def get_allowed_tokens(
