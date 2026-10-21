@@ -307,4 +307,4 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("YOU ARE THE PROBLEM")
+        print("\rYOU ARE THE PROBLEM")

@@ -21,6 +21,13 @@ members = [
     "llm_sdk",
 ]
 
+[tool.mypy]
+mypy_path = "$MYPY_CONFIG_FILE_DIR/llm_sdk"
+
+[[tool.mypy.overrides]]
+module = "llm_sdk.*"
+ignore_errors = true
+
 [tool.uv.sources]
 llm-sdk = { workspace = true }
 
