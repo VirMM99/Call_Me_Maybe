@@ -50,6 +50,8 @@ def extract_parameters_from_json(
                 value = float(value)
             elif param.type.value == "integer":
                 value = int(value)
+            elif name == "path" and isinstance(value, str):
+                value = value.strip()
             params[name] = value
         return params
     except (json.JSONDecodeError, KeyError) as e:
@@ -72,7 +74,13 @@ def build_prompt(
         function_definitions: list[FunctionDefinitionCheck]
 ) -> str:
     """Build the model prompt, listing the available functions."""
-    lines: list[str] = ["Available functions:"]
+    lines: list[str] = [
+        "Select exactly one function that best matches the user's request.",
+        "Choose based on the meaning of the request, not just matching words.",
+        "Do not select a database function unless the user asks to execute a SQL query.",
+        "Do not select a file function unless the user asks to read a file.",
+        "Available functions:"
+    ]
     for func in function_definitions:
         params = ",".join(
             f"{name} ({param.type.value})"
@@ -106,9 +114,27 @@ def build_prompt_param(
         f"{fn_name}({params_info})\n"
         f"Function description: {fn_description}\n"
         f"Provide the arguments to solve user prompt in JSON format:\n"
+        f"Copy string values directly from the user's request whenever possible. "
+        f"Never invent, paraphrase, or complete a string value. "
+        f"For database parameters, use the database name given by the user "
+        f"without adding suffixes such as '_db'. "
+        f"If the function has a parameter named template and the user prompt "
+        f"starts with 'Format template:', reproduce the remaining text exactly. "
+        f"Preserve all original words, spaces, punctuation, quotation marks, "
+        f"apostrophes, and placeholders, including braces.\n"
         f'[\n{{\n"prompt": "{prompt}",\n'
         f'"name": "{fn_name}",\n"parameters":\n{{'
     )
+
+
+
+def extract_template_from_prompt(prompt: str) -> str | None:
+    """Extract a literal template from a 'Format template:' prompt."""
+    prefix = "Format template:"
+    if prompt.startswith(prefix):
+        return prompt[len(prefix):].lstrip()
+    return None
+
 
 def generate_function_call(
         prompt: str,
@@ -117,10 +143,10 @@ def generate_function_call(
         function_definitions: list[FunctionDefinitionCheck]
         ) -> tuple[str, dict[str, Any]]:
     """Generate function name and parameters for a single prompt."""
-    input_ids: list[int] = ( 
-                llm_model.encode(build_prompt(prompt, function_definitions)
-                ).tolist()[0]
-            )
+    prompt_text = build_prompt(prompt, function_definitions)
+
+    input_ids: list[int] = llm_model.encode(prompt_text).tolist()[0]
+
     generate_ids: list[int] = []
     selected_function: str | None = None
 
@@ -216,6 +242,13 @@ def generate_function_call(
     parameters = extract_parameters_from_json(
             decoded, selected_definition
         )
+    if (
+        selected_function == "fn_format_template"
+        and "template" in selected_definition.parameters
+    ):
+        template = extract_template_from_prompt(prompt)
+        if template is not None:
+            parameters["template"] = template
     
     return selected_function, parameters
 
@@ -284,7 +317,7 @@ def main() -> int:
 
         except Exception as e:
             print(f"Error processing '{prompt}': {e}", file=sys.stderr)
-            return 1
+            # return 1
 
     try:
         with open(args.output, "w", encoding="utf-8") as f:

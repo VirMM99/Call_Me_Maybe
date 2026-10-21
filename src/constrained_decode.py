@@ -142,18 +142,19 @@ def get_allowed_next_tokens(
         quote_ids = get_allowed_tokens('"', llm_model)
         content_ids = _string_token_ids(vocab_path, vocab)
 
-        # limited numbers of tokens generated
         quote_token_ids = set(quote_ids)
         content_ids = [
-            token_id for token_id in content_ids
+            token_id
+            for token_id in content_ids
             if token_id not in quote_token_ids
         ]
 
-        # generate_text = llm_model.decode(generate_ids)
-        # # if the chain is too large, we force the close
-        # current_string = generate_text.rsplit('"', 1)[-1]
-        # if len(current_string) >= 100:
-        #     return quote_ids
+        decoded = llm_model.decode(generate_ids)
+        current_string = decoded.rsplit('"', 1)[-1]
+
+        if len(current_string) >= 100:
+            return quote_ids
+
         return content_ids + quote_ids
 
     if arg_state == "sep":
@@ -350,5 +351,4 @@ def constrained_decode_parameters(
         token_text, new_generate_ids, llm_model
     )
     return selected_token, next_param_index, next_arg_state
-
 
