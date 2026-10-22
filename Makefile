@@ -28,12 +28,12 @@ clean:
 
 # Mandatory lint: flake8 + mypy with the exact flags required by the subject
 lint:
-	uv run flake8 .
-	uv run mypy . $(MYPY_FLAGS)
+	uv run flake8 src
+	uv run mypy src $(MYPY_FLAGS)
 
 # Optional stricter lint (mypy --strict)
 lint-strict:
-	uv run flake8 .
-	uv run mypy . --strict
+	uv run flake8 src
+	uv run mypy src --strict $(MYPY_FLAGS)
 
 .PHONY: install run debug clean lint lint-strict

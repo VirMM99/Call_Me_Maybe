@@ -8,7 +8,10 @@ from typing import Any
 from llm_sdk import Small_LLM_Model
 from .file_loader import load_fn_definitions, load_prompts, ParsingFileError
 from .basemodels import FunctionDefinitionCheck, PromptItem, FunctionCallOutput
-from .constrained_decode import constrained_decode_function_name, constrained_decode_parameters
+from .constrained_decode import (
+                            constrained_decode_function_name,
+                            constrained_decode_parameters
+                            )
 from .validator import validate_function_call
 import time
 
@@ -77,7 +80,8 @@ def build_prompt(
     lines: list[str] = [
         "Select exactly one function that best matches the user's request.",
         "Choose based on the meaning of the request, not just matching words.",
-        "Do not select a database function unless the user asks to execute a SQL query.",
+        "Do not select a database function unless "
+        "the user asks to execute a SQL query.",
         "Do not select a file function unless the user asks to read a file.",
         "Available functions:"
     ]
@@ -96,7 +100,7 @@ def build_prompt_param(
         prompt: str,
         fn_name: str,
         fn_description: str,
-        fn_parameters: dict
+        fn_parameters: dict[str, Any]
 ) -> str:
     """This create the estructured context text
     for the generation phase of parameters
@@ -105,27 +109,28 @@ def build_prompt_param(
     params_info = ", ".join([
         f"{name}: {param.type.value}"
         for name, param in fn_parameters.items()
-    ]) 
+    ])
 
-    # Clear structure that guides the model to 
+    # Clear structure that guides the model to
     # the generation of the JSON of arguments
     return (
         f"Using this function"
         f"{fn_name}({params_info})\n"
         f"Function description: {fn_description}\n"
         f"Provide the arguments to solve user prompt in JSON format:\n"
-        f"Copy string values directly from the user's request whenever possible. "
+        f"Copy string values directly from the user's "
+        f"request whenever possible. "
         f"Never invent, paraphrase, or complete a string value. "
         f"For database parameters, use the database name given by the user "
         f"without adding suffixes such as '_db'. "
         f"If the function has a parameter named template and the user prompt "
-        f"starts with 'Format template:', reproduce the remaining text exactly. "
+        f"starts with 'Format template:', "
+        f"reproduce the remaining text exactly. "
         f"Preserve all original words, spaces, punctuation, quotation marks, "
         f"apostrophes, and placeholders, including braces.\n"
         f'[\n{{\n"prompt": "{prompt}",\n'
         f'"name": "{fn_name}",\n"parameters":\n{{'
     )
-
 
 
 def extract_template_from_prompt(prompt: str) -> str | None:
@@ -206,7 +211,8 @@ def generate_function_call(
     for _ in range(80):
         logits = llm_model.get_logits_from_input_ids(input_ids)
         # # print debugueo
-        # print("\n//////// Contexto para encontrar parametros (token a token):")
+        # print("\n//////// Contexto para encontrar parametros
+        # (token a token):")
         # for i in input_ids:
         #     print(llm_model.decode([i]), end="")
         # #Fin del print
@@ -237,8 +243,8 @@ def generate_function_call(
     while decoded.endswith("}}"):
         decoded = decoded[:-1]
     while decoded.endswith(","):
-            decoded = decoded[:-1] + '}'
-    
+        decoded = decoded[:-1] + '}'
+
     parameters = extract_parameters_from_json(
             decoded, selected_definition
         )
@@ -249,7 +255,7 @@ def generate_function_call(
         template = extract_template_from_prompt(prompt)
         if template is not None:
             parameters["template"] = template
-    
+
     return selected_function, parameters
 
 

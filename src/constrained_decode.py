@@ -32,8 +32,9 @@ def _numeric_token_ids(
             )
         ]
     return _numeric_cache[vocab_path]
+# LLM find the tokens that have '"'
 
-#LLM find the tokens that have '""
+
 def _string_token_ids(
         vocab_path: str, vocab: dict[str, int]
         ) -> list[int]:
@@ -52,7 +53,7 @@ def _string_token_ids(
             # Ġ (space)
             if token.count('\u0120') >= 2:
                 continue
-    
+
             if '"' not in token:
                 valid_ids.append(token_id)
             else:
@@ -122,7 +123,7 @@ def get_allowed_next_tokens(
         matched = _matched_key_tokens(key_ids, generate_ids)
         if matched >= len(key_ids):
             return get_allowed_tokens(":", llm_model)
-        return[key_ids[matched]]
+        return [key_ids[matched]]
 
     if arg_state == "value":
         if param_index >= num_params:
@@ -134,7 +135,7 @@ def get_allowed_next_tokens(
             terminator = "}" if param_index == num_params - 1 else ","
             return (
                 _numeric_token_ids(vocab_path, vocab)
-                + get_allowed_tokens (terminator, llm_model)
+                + get_allowed_tokens(terminator, llm_model)
             )
         return []
 
@@ -186,14 +187,14 @@ def get_next_state(
 
     if current_state == "key":
         if param_index >= num_params:
-            return(param_index, "end")
+            return (param_index, "end")
 
         param_name = param_names_and_types[param_index][0]
         key_ids = llm_model.encode(f'"{param_name}":').tolist()[0]
         matched = _matched_key_tokens(key_ids, generate_ids)
 
         if matched >= len(key_ids):
-            return(param_index, "value")
+            return (param_index, "value")
         return (param_index, "key")
 
     if current_state == "value":
@@ -230,13 +231,13 @@ def get_next_state(
                 return (param_index + 1, "key")
             # if token only have quotation mark
             # then we go to sep, it can put the comma in the next step
-            return(param_index, "sep")
+            return (param_index, "sep")
         return (param_index, "string_content")
     return (param_index, "end")
 
 
 def _apply_logit_mask(logits: list[float], allowed_ids: list[int]) -> int:
-    """Common Helper: applies -inf 
+    """Common Helper: applies -inf
     to unallowed logits and returns the best token."""
     if not logits:
         raise ValueError("There is no logits list")
@@ -287,7 +288,7 @@ def constrained_decode_parameters(
         param_index: int = 0,
         arg_state: str = "start"
         ) -> tuple[int, int, str]:
-    """Responsibility 2: Decode and restrict JSON 
+    """Responsibility 2: Decode and restrict JSON
     parameters using the state machine."""
     vocab_path: str = llm_model.get_path_to_vocab_file()
     vocab: dict[str, int] = _load_vocab(vocab_path)
@@ -331,8 +332,10 @@ def constrained_decode_parameters(
     # # 2. We go around them to print them
     # print("\nTop 5 tokens más probables:")
     # for token_id, score in top_5:
-    #     token_text = llm_model.decode([token_id])
-    #     print(f"Token ID: {token_id} | Score: {score:.2f} | Texto: {token_text!r}")
+    #   token_text = llm_model.decode([token_id])
+    #   print(
+    #       f"Token ID: {token_id} | Score: {score:.2f} "
+    #       f"| Texto: {token_text!r}")
     # # End of debug
 
     selected_token = _apply_logit_mask(logits, list_ids)
@@ -351,4 +354,3 @@ def constrained_decode_parameters(
         token_text, new_generate_ids, llm_model
     )
     return selected_token, next_param_index, next_arg_state
-
