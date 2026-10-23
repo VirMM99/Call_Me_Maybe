@@ -391,6 +391,9 @@ Call_Me_Maybe/
 ├── moulinette/               # Grading system (provided)
 │   └── moulinette/
 └── src/
+
+
+Use of AI. This project was developed with the assistance of an AI coding assistant. AI was used to audit and clean the existing codebase. All algorithms and data structures (Dijkstra, capacity handling, turn engine) are original implementations written for this project; AI did not generate the core simulation or pathfinding logic from scratch.
     ├── __init__.py
     ├── __main__.py           # Entry point + CLI
     ├── basemodels.py         # Pydantic models
